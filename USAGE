@@ -1,0 +1,44 @@
+Pipeline for FINTA MultiBundle Evaluation
+======================================
+
+USAGE
+
+nextflow run main.nf --input ... [OPTIONAL_ARGUMENTS]
+
+
+DESCRIPTION
+
+    --input=/path/to/[root]              Root folder containing multiple subjects
+
+                                        [root]
+                                        ├── S1
+                                        │   ├── Fixed
+                                        │   │   ├── t1.nii.gz
+                                        │   │   ├── AF_L.trk
+                                        │   │   ├── AF_R.trk
+                                        │   │   └── *.trk
+                                        │   └── Moving
+                                        |       ├── t1.nii.gz
+                                        │       ├── AF_L.trk
+                                        │       ├── AF_R.trk
+                                        │       └── *.trk
+                                        └── S2
+                                            └── *
+
+    --bundles_config                    Path to json config file
+
+    OPTIONAL ARGUMENTS (current value)
+
+    --to_register                           Flag to register moving to fixed ($to_register)
+    --register_processes                    Number of processes for registration task ($register_processes).
+    --processes                             The number of parallel processes to launch ($cpu_count).
+                                            Only affects the local scheduler.
+
+    --output_dir                            Directory where to write the final results.
+                                            By default, will be in "./results"
+
+NOTES
+
+Use '-C config_file.config' to specify a non-default configuration file.
+The '-C config_file.config' must be inserted after the nextflow call
+like 'nextflow -C config_file.config run ...'.
