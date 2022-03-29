@@ -1,4 +1,4 @@
-Pipeline for FINTA MultiBundle Evaluation
+Pipeline for FINTA MultiBundle
 ======================================
 
 USAGE
@@ -12,24 +12,19 @@ DESCRIPTION
 
                                         [root]
                                         ├── S1
-                                        │   ├── Fixed
-                                        │   │   ├── t1.nii.gz
-                                        │   │   ├── AF_L.trk
-                                        │   │   ├── AF_R.trk
-                                        │   │   └── *.trk
-                                        │   └── Moving
-                                        |       ├── t1.nii.gz
-                                        │       ├── AF_L.trk
-                                        │       ├── AF_R.trk
-                                        │       └── *.trk
+                                        │   ├── t1.nii.gz
+                                        │   └── tractogram.trk
                                         └── S2
                                             └── *
 
-    --bundles_config                    Path to json config file
+    --model                             Path to .pt Pytorch model
+    --atlas_config                      Path to json config file
+    --atlas_anat                        Path to reference anatomy of the atlas
+    --atlas_directory                   Path of the folder containing all 
+    --atlas_thresholds                  Path to json thresholds file
 
     OPTIONAL ARGUMENTS (current value)
 
-    --to_register                           Flag to register moving to fixed ($to_register)
     --register_processes                    Number of processes for registration task ($register_processes).
     --processes                             The number of parallel processes to launch ($cpu_count).
                                             Only affects the local scheduler.

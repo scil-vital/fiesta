@@ -1,4 +1,4 @@
-# FINTA Evaluation Quantitative pipeline
+# FINTA pipeline
 ===================
 
 

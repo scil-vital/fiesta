@@ -1,0 +1,6 @@
+work/
+.nextflow*
+result*/
+tutorial*
+config*
+inputs/
