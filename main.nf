@@ -4,9 +4,7 @@ if(params.help) {
     usage = file("$baseDir/USAGE")
     cpu_count = Runtime.runtime.availableProcessors()
 
-    bindings = ["atlas_config":"$params.atlas_config",
-                "atlas_directory":"$params.atlas_directory",
-                "register_processes":"$params.register_processes",
+    bindings = ["register_processes":"$params.register_processes",
                 "cpu_count":"$cpu_count"]
 
     engine = new groovy.text.SimpleTemplateEngine()
