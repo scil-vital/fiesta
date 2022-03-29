@@ -133,7 +133,7 @@ process Filter_Streamlines {
     filter_streamline.py ${tractogram} ${atlas_directory} \
         ${model} ${atlas_anat} \
         ${thresholds} ${atlas_config} \
-        . -d cuda -b 200000 -f -vv
+        . -d cuda -b 500000 -f -vv
     """
 }
 
@@ -149,7 +149,7 @@ process Concatenating_Bundles {
     script:
     """
     mkdir -p tmp 
-    cp ${bundles} tmp
+    mv ${bundles} tmp
     cat "${atlas_config}" | jq -r '. | keys[]' |
     while IFS= read -r value; do
         echo Concatenating tmp/*\${value}*
@@ -174,7 +174,7 @@ process Registering_in_Native {
     do
         filename=\$( basename \$bundle )
         scil_apply_transform_to_tractogram.py \$bundle ${reference} ${affine} \$filename --in_deformation ${warp} --reverse_operation -f -vv
-        cp \$filename ${sid}__\$filename
+        mv \$filename ${sid}__\$filename
     done
     
     """
