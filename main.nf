@@ -100,6 +100,8 @@ process Register_Anat {
 tractogram.join(transformation_for_tractogram).set{tractogram_registration} 
 
 process Register_Streamlines {
+    memory '20 GB'
+
     input:
     set sid, file(tractogram), file(affine), file(inverse_warp), file(atlas_anat) from tractogram_registration
 
@@ -122,6 +124,8 @@ tractogram_registered
     .set{filtering_channels}
 
 process Filter_Streamlines {
+    memory '20 GB'
+
     input:
     set sid, file(tractogram), file(atlas_anat), file(model), file(thresholds), file(atlas_directory), file(atlas_config) from filtering_channels
 
@@ -140,6 +144,8 @@ process Filter_Streamlines {
 bundles.combine(atlas_config_for_concatenation).set{file_for_concatenation}
 
 process Concatenating_Bundles {
+    memory '5 GB'
+
     input:
     set sid, file(bundles), file(atlas_config) from file_for_concatenation
 
@@ -161,6 +167,7 @@ process Concatenating_Bundles {
 bundles_concatenated.join(inverse_transformation_for_tractogram).set{files_for_inverse_transforms}
 
 process Registering_in_Native {
+    memory '5 GB'
     input:
     set sid, file(bundles), file(affine), file(warp), file(reference) from files_for_inverse_transforms
 
