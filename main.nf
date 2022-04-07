@@ -92,7 +92,7 @@ process Register_Anat {
     script:
     """
     export ANTS_RANDOM_SEED=1234
-    antsRegistrationSyNQuick.sh -d 3 -f ${atlas_anat} -m ${reference} -o ${sid}__output -t s -n ${params.register_processes}
+    antsRegistrationSyN.sh -d 3 -f ${atlas_anat} -m ${reference} -o ${sid}__output -t s -n ${params.register_processes}
     """
 }
 
