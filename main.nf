@@ -177,26 +177,3 @@ process Concatenating_Bundles {
     done
     """
 }
-
-/*bundles_concatenated.join(inverse_transformation_for_tractogram).set{files_for_inverse_transforms}
-
-process Registering_in_Native {
-    memory '5 GB'
-    input:
-    set sid, file(bundles), file(affine), file(warp), file(reference) from files_for_inverse_transforms
-
-    output:
-    file "*.trk"
-
-    script:
-    String bundles_list = bundles.join(", ").replace(',', '')
-    """
-    for bundle in $bundles_list
-    do
-        filename=\$( basename \$bundle )
-        scil_apply_transform_to_tractogram.py \$bundle ${reference} ${affine} \$filename --in_deformation ${warp} --reverse_operation -f -vv
-        mv \$filename ${sid}__\$filename
-    done
-    
-    """
-}*/
