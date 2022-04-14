@@ -84,8 +84,7 @@ process Register_Anat {
 
     output:
     // [sid, affine.mat, inverseWarp.nii.gz, fixed_t1.nii.gz]
-    set sid, "${sid}__output0GenericAffine.mat", "${sid}__output1InverseWarp.nii.gz", "${atlas_anat}" into transformation_for_tractogram
-    set sid, "${sid}__output0GenericAffine.mat", "${sid}__output1Warp.nii.gz", "${sid}__outputInverseWarped.nii.gz" into inverse_transformation_for_tractogram
+    set sid, "${sid}__output0GenericAffine.mat", "${sid}__output1InverseWarp.nii.gz", "${atlas_anat}", "${reference}" into transformation_for_tractogram
     file "${sid}__outputWarped.nii.gz"
 
     script:
@@ -102,10 +101,11 @@ process Register_Streamlines {
     memory '20 GB'
 
     input:
-    set sid, file(tractogram), file(affine), file(inverse_warp), file(atlas_anat) from tractogram_registration
+    set sid, file(tractogram), file(affine), file(inverse_warp), file(atlas_anat), file(native_anat) from tractogram_registration
 
     output:
     set sid, "${sid}_output.trk", "${atlas_anat}" into tractogram_registered // [sid, output.trk]
+    set sid, "${sid}_native.trk", "${native_anat}" into tractogram_native // [sid, output.trk]
 
     script:
     """
@@ -113,8 +113,8 @@ process Register_Streamlines {
     if [[ \$( wc -w <<< \$files ) -gt 1 ]]
     then 
         echo \$files
-        scil_streamlines_math.py concatenate \$files out.trk -f -vv
-        scil_apply_transform_to_tractogram.py out.trk ${atlas_anat} \
+        scil_streamlines_math.py concatenate \$files ${sid}_native.trk -f -vv
+        scil_apply_transform_to_tractogram.py ${sid}_native.trk ${atlas_anat} \
         ${affine} ${sid}_output.trk \
         --inverse --in_deformation ${inverse_warp} -f -vv
     else
@@ -122,12 +122,14 @@ process Register_Streamlines {
         scil_apply_transform_to_tractogram.py ${tractogram} ${atlas_anat} \
         ${affine} ${sid}_output.trk \
         --inverse --in_deformation ${inverse_warp} -f -vv
+        mv ${tractogram} ${sid}_native.trk
     fi
 
     """
 }
 
 tractogram_registered
+    .join(tractogram_native)
     .combine(model)
     .combine(atlas_thresholds)
     .combine(atlas_directory)
@@ -138,7 +140,7 @@ process Filter_Streamlines {
     memory '20 GB'
 
     input:
-    set sid, file(tractogram), file(atlas_anat), file(model), file(thresholds), file(atlas_directory), file(atlas_config) from filtering_channels
+    set sid, file(tractogram), file(atlas_anat), file(native_tractogram), file(native_anat), file(model), file(thresholds), file(atlas_directory), file(atlas_config) from filtering_channels
 
     output:
     set sid, "*.trk" into bundles // [sid, output.trk]
@@ -147,8 +149,8 @@ process Filter_Streamlines {
     """
     filter_streamline.py ${tractogram} ${atlas_directory} \
         ${model} ${atlas_anat} \
-        ${thresholds} ${atlas_config} \
-        . -d cuda -b 500000 -f -vv
+        ${thresholds} ${atlas_config} . \
+        --original_tractogram ${native_tractogram} --original_reference ${native_anat}  -d cuda -b 500000 -f -vv
     """
 }
 
@@ -171,11 +173,12 @@ process Concatenating_Bundles {
     while IFS= read -r value; do
         echo Concatenating tmp/*\${value}*
         scil_streamlines_math.py concatenate tmp/*\${value}* \${value}.trk -vv | echo "Done"
+        mv \${value}.trk ${sid}__\${value}.trk
     done
     """
 }
 
-bundles_concatenated.join(inverse_transformation_for_tractogram).set{files_for_inverse_transforms}
+/*bundles_concatenated.join(inverse_transformation_for_tractogram).set{files_for_inverse_transforms}
 
 process Registering_in_Native {
     memory '5 GB'
@@ -196,4 +199,4 @@ process Registering_in_Native {
     done
     
     """
-}
+}*/
