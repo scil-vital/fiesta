@@ -51,8 +51,7 @@ log.info "Input: $params.input"
 root = file(params.input)
 
 Channel
-    .fromPath("$root/**/*.trk")
-    .map{[it.parent.name, it]}
+    .fromFilePairs("$root/**/*.trk", size: -1) { it.parent.name }
     .set{ tractogram } // [sid, tractogram.trk]
 
 Channel
@@ -110,9 +109,21 @@ process Register_Streamlines {
 
     script:
     """
-    scil_apply_transform_to_tractogram.py ${tractogram} ${atlas_anat} \
+    files="${tractogram}"
+    if [[ \$( wc -w <<< \$files ) -gt 1 ]]
+    then 
+        echo \$files
+        scil_streamlines_math.py concatenate \$files out.trk -f -vv
+        scil_apply_transform_to_tractogram.py out.trk ${atlas_anat} \
         ${affine} ${sid}_output.trk \
         --inverse --in_deformation ${inverse_warp} -f -vv
+    else
+        echo \$files
+        scil_apply_transform_to_tractogram.py ${tractogram} ${atlas_anat} \
+        ${affine} ${sid}_output.trk \
+        --inverse --in_deformation ${inverse_warp} -f -vv
+    fi
+
     """
 }
 
