@@ -57,7 +57,7 @@ Channel
 Channel
     .fromPath("$root/**/*.nii.gz")
     .map{[it.parent.name, it]}
-    .set{ reference } // [sid, t1.nii.gz]
+    .into{ reference; reference_for_display } // [sid, t1.nii.gz]
 
 if (!(params.atlas_anat) || !(params.atlas_config) || !(params.atlas_directory)) {
     error "You must specify all 3 atlas related input. --atlas_anat, " +
@@ -116,12 +116,12 @@ process Register_Streamlines {
         scil_streamlines_math.py concatenate \$files ${sid}_native.trk -f -vv
         scil_apply_transform_to_tractogram.py ${sid}_native.trk ${atlas_anat} \
         ${affine} ${sid}_output.trk \
-        --inverse --in_deformation ${inverse_warp} -f -vv
+        --inverse --in_deformation ${inverse_warp} -f
     else
         echo \$files
         scil_apply_transform_to_tractogram.py ${tractogram} ${atlas_anat} \
         ${affine} ${sid}_output.trk \
-        --inverse --in_deformation ${inverse_warp} -f -vv
+        --inverse --in_deformation ${inverse_warp} -f
         mv ${tractogram} ${sid}_native.trk
     fi
 
@@ -171,9 +171,31 @@ process Concatenating_Bundles {
     mv ${bundles} tmp
     cat "${atlas_config}" | jq -r '. | keys[]' |
     while IFS= read -r value; do
-        echo Concatenating tmp/*\${value}*
+        echo Concatenating tmp/*\${value}* | echo "Done"
         scil_streamlines_math.py concatenate tmp/*\${value}* \${value}.trk -vv | echo "Done"
-        mv \${value}.trk ${sid}__\${value}.trk
+        mv \${value}.trk ${sid}__\${value}.trk | echo "Done"
     done
+    """
+}
+
+reference_for_display.join(bundles_concatenated).set{bundles_for_display}
+
+process Visualize_Bundles {
+    //errorStrategy 'retry'
+    //maxRetries 3
+    //memory '20 GB'
+
+    input:
+    set sid, file(anat), file(bundles) from bundles_for_display
+
+    output:
+    file "*png"
+
+    script:
+    """
+    export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=1
+    export OMP_NUM_THREADS=1
+    export OPENBLAS_NUM_THREADS=1
+    scil_visualize_bundles_mosaic.py ${anat} ${bundles} ${sid}__bundles.png --no_information
     """
 }
