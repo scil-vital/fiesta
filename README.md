@@ -30,7 +30,6 @@ To launch the pipeline you can run:
 
 ```
 nextflow run main.nf --input inputs/ --model /path/to/best_model_ae.pt --atlas_config /path/to/rbx.json --atlas_anat /path/to/mni_masked.nii.gz --atlas_directory /path/to/rbx_atlas/ --atlas_thresholds /path/to/thresholds_ae.json -with-singularity /path/to/finta_multibundles.sif -resume
-
 ```
 
 
