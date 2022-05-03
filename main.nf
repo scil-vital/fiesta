@@ -13,7 +13,7 @@ if(params.help) {
     return
 }
 
-log.info "FINTA Multibundles Flow"
+log.info "FINTA Flow"
 log.info "==============================================="
 log.info ""
 log.info "Start time: $workflow.start"
@@ -59,9 +59,9 @@ Channel
     .map{[it.parent.name, it]}
     .into{ reference; reference_for_display } // [sid, t1.nii.gz]
 
-if (!(params.atlas_anat) || !(params.atlas_config) || !(params.atlas_directory)) {
-    error "You must specify all 3 atlas related input. --atlas_anat, " +
-    "--atlas_config and --atlas_directory all are mandatory."
+if (!(params.atlas_anat) || !(params.atlas_config) || !(params.atlas_directory) || !(params.atlas_thresholds)) {
+    error "You must specify all 4 atlas related input. --atlas_anat, " +
+    "--atlas_config, --atlas_directory and atlas_thresholds all are mandatory."
 }
 
 atlas_anat = Channel.fromPath("$params.atlas_anat")
@@ -73,18 +73,21 @@ atlas_thresholds = Channel.fromPath("$params.atlas_thresholds")
 
 reference
     .combine(atlas_anat)
-    .set{reference_atlas_anat} 
+    .set{reference_atlas_anat} // [sid, t1.nii.gz, atlas.nii.gz]
 
 process Register_Anat {
     cpus params.register_processes
     memory '2 GB'
 
     input:
-    set sid, file(reference), file(atlas_anat) from reference_atlas_anat
+    set sid, file(reference), file(atlas_anat) from reference_atlas_anat // [sid, t1.nii.gz, atlas.nii.gz]
 
     output:
-    // [sid, affine.mat, inverseWarp.nii.gz, fixed_t1.nii.gz]
-    set sid, "${sid}__output0GenericAffine.mat", "${sid}__output1InverseWarp.nii.gz", "${atlas_anat}", "${reference}" into transformation_for_tractogram
+    // [sid, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
+    set sid, "${sid}__output0GenericAffine.mat", 
+        "${sid}__output1InverseWarp.nii.gz", 
+        "${atlas_anat}", 
+        "${reference}" into transformation_for_tractogram 
     file "${sid}__outputWarped.nii.gz"
 
     script:
@@ -94,7 +97,7 @@ process Register_Anat {
     """
 }
 
-// [sid, tractogram.trk, affine.mat, inverseWarp.nii.gz, outputWarped.nii.gz]
+// [sid, tractogram.trk, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
 tractogram.join(transformation_for_tractogram).set{tractogram_registration} 
 
 process Register_Streamlines {
@@ -104,8 +107,8 @@ process Register_Streamlines {
     set sid, file(tractogram), file(affine), file(inverse_warp), file(atlas_anat), file(native_anat) from tractogram_registration
 
     output:
-    set sid, "${sid}_output.trk", "${atlas_anat}" into tractogram_registered // [sid, output.trk]
-    set sid, "${sid}_native.trk", "${native_anat}" into tractogram_native // [sid, output.trk]
+    set sid, "${sid}_output.trk", "${atlas_anat}" into tractogram_registered // [sid, output.trk, atlas.nii.gz]
+    set sid, "${sid}_native.trk", "${native_anat}" into tractogram_native // [sid, native.trk, t1.nii.gz]
 
     script:
     """
@@ -128,6 +131,7 @@ process Register_Streamlines {
     """
 }
 
+// [sid, output.trk, atlas.nii.gz, native.trk, t1.nii.gz, model.pt, thresholds.json, atlas_dir/, config.json]
 tractogram_registered
     .join(tractogram_native)
     .combine(model)
@@ -143,7 +147,7 @@ process Filter_Streamlines {
     set sid, file(tractogram), file(atlas_anat), file(native_tractogram), file(native_anat), file(model), file(thresholds), file(atlas_directory), file(atlas_config) from filtering_channels
 
     output:
-    set sid, "*.trk" into bundles // [sid, output.trk]
+    set sid, "*.trk" into bundles // [sid, AC_0.trk, AC_1.trk, ..., AF_L_0.trk, AF_L_1.trk, ...]
 
     script:
     """
@@ -154,6 +158,7 @@ process Filter_Streamlines {
     """
 }
 
+// [sid, AC_0.trk, AC_1.trk, ..., AF_L_0.trk, AF_L_1.trk, ..., config.json]
 bundles.combine(atlas_config_for_concatenation).set{file_for_concatenation}
 
 process Concatenating_Bundles {
@@ -163,6 +168,7 @@ process Concatenating_Bundles {
     set sid, file(bundles), file(atlas_config) from file_for_concatenation
 
     output:
+    // [sid, AC.trk, AF_L.trk, ...]
     set sid, "*.trk" into bundles_concatenated
 
     script:
@@ -178,6 +184,7 @@ process Concatenating_Bundles {
     """
 }
 
+// [sid, t1.nii.gz, AC.trk, AF_L.trk, ...]
 reference_for_display.join(bundles_concatenated).set{bundles_for_display}
 
 process Visualize_Bundles {
@@ -196,6 +203,6 @@ process Visualize_Bundles {
     export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=1
     export OMP_NUM_THREADS=1
     export OPENBLAS_NUM_THREADS=1
-    scil_visualize_bundles_mosaic.py ${anat} ${bundles} ${sid}__bundles.png --no_information
+    scil_visualize_bundles_mosaic.py ${anat} ${bundles} ${sid}__bundles.png
     """
 }

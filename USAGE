@@ -1,19 +1,26 @@
-Pipeline for FINTA MultiBundle
+Pipeline for FINTA Flow
 ======================================
 
 USAGE
 
-nextflow run main.nf --input ... [OPTIONAL_ARGUMENTS]
+nextflow run main.nf 
+--input inputs/ \
+--model model.pt \
+--atlas_config config.json \
+--atlas_anat anat.nii.gz \
+--atlas_directory atlas/ \
+--atlas_thresholds thresholds.json [OPTIONAL_ARGUMENTS]
 
 
 DESCRIPTION
 
-    --input=/path/to/[root]              Root folder containing multiple subjects
+    --input=/path/to/[root]             Root folder containing multiple subjects. 
+                                        You can pass many trk file per subjects (Local.trk, PFT.trk, SET.trk, ...)
 
                                         [root]
                                         ├── S1
                                         │   ├── t1.nii.gz
-                                        │   └── tractogram.trk
+                                        │   └── *.trk
                                         └── S2
                                             └── *
 
