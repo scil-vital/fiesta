@@ -119,12 +119,12 @@ process Register_Streamlines {
         scil_streamlines_math.py concatenate \$files ${sid}_native.trk -f -vv
         scil_apply_transform_to_tractogram.py ${sid}_native.trk ${atlas_anat} \
         ${affine} ${sid}_output.trk \
-        --inverse --in_deformation ${inverse_warp} -f
+        --inverse --in_deformation ${inverse_warp} -f --keep_invalid
     else
         echo \$files
         scil_apply_transform_to_tractogram.py ${tractogram} ${atlas_anat} \
         ${affine} ${sid}_output.trk \
-        --inverse --in_deformation ${inverse_warp} -f
+        --inverse --in_deformation ${inverse_warp} -f --keep_invalid
         mv ${tractogram} ${sid}_native.trk
     fi
 
