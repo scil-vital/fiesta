@@ -52,12 +52,12 @@ root = file(params.input)
 
 Channel
     .fromFilePairs("$root/**/*.trk", size: -1) { it.parent.name }
-    .set{ tractogram } // [sid, tractogram.trk]
+    .into{ tractogram; tractogram_for_check } // [sid, tractogram.trk]
 
 Channel
     .fromPath("$root/**/*.nii.gz")
     .map{[it.parent.name, it]}
-    .into{ reference; reference_for_display } // [sid, t1.nii.gz]
+    .into{ reference; reference_for_display; reference_for_check } // [sid, t1.nii.gz]
 
 if (!(params.atlas_anat) || !(params.atlas_config) || !(params.atlas_directory) || !(params.atlas_thresholds)) {
     error "You must specify all 4 atlas related input. --atlas_anat, " +
@@ -75,7 +75,34 @@ reference
     .combine(atlas_anat)
     .set{reference_atlas_anat} // [sid, t1.nii.gz, atlas.nii.gz]
 
-process Register_Anat {
+tractogram_for_check
+    .join(reference_for_check)
+    .set{compatibility_check}
+
+
+process Check_Files_Compatibility {
+    errorStrategy 'ignore'
+
+    input:
+    set sid, file(tractogram), file(reference) from compatibility_check // [sid, tractogram.trk, t1.nii.gz]
+
+    output:
+    // [sid, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
+    set sid, tractogram, reference into checked_files 
+
+    script:
+    """
+    compatibility=\$(scil_verify_space_attributes_compatibility.py ${tractogram} ${reference})
+    if [[ \$compatibility != "All input files have compatible headers." ]]
+    then
+        exit 1
+    fi    
+    """
+}
+
+checked_files.view()
+
+/*process Register_Anat {
     cpus params.register_processes
     memory '2 GB'
 
@@ -93,7 +120,7 @@ process Register_Anat {
     script:
     """
     export ANTS_RANDOM_SEED=1234
-    antsRegistrationSyN.sh -d 3 -f ${atlas_anat} -m ${reference} -o ${sid}__output -t s -n ${params.register_processes}
+    antsRegistrationSyNQuick.sh -d 3 -f ${atlas_anat} -m ${reference} -o ${sid}__output -t s -n ${params.register_processes}
     """
 }
 
@@ -141,7 +168,8 @@ tractogram_registered
     .set{filtering_channels}
 
 process Filter_Streamlines {
-    memory '20 GB'
+    cache false
+    memory '30 GB'
 
     input:
     set sid, file(tractogram), file(atlas_anat), file(native_tractogram), file(native_anat), file(model), file(thresholds), file(atlas_directory), file(atlas_config) from filtering_channels
@@ -205,4 +233,4 @@ process Visualize_Bundles {
     export OPENBLAS_NUM_THREADS=1
     scil_visualize_bundles_mosaic.py ${anat} ${bundles} ${sid}__bundles.png
     """
-}
+}*/
