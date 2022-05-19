@@ -3,5 +3,6 @@ work/
 result*/
 tutorial*
 config*
-inputs/
+input*/
 *.sif
+threshold*/
