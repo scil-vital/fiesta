@@ -87,13 +87,14 @@ process Register_Anat {
     set sid, "${sid}__output0GenericAffine.mat", 
         "${sid}__output1InverseWarp.nii.gz", 
         "${atlas_anat}", 
-        "${reference}" into transformation_for_tractogram 
+        "${sid}__native_anat.nii.gz" into transformation_for_tractogram 
     file "${sid}__outputWarped.nii.gz"
 
     script:
     """
     export ANTS_RANDOM_SEED=1234
     antsRegistrationSyN.sh -d 3 -f ${atlas_anat} -m ${reference} -o ${sid}__output -t s -n ${params.register_processes}
+    mv ${reference} ${sid}__native_anat.nii.gz
     """
 }
 
@@ -161,7 +162,7 @@ process Filter_Streamlines {
 // [sid, AC_0.trk, AC_1.trk, ..., AF_L_0.trk, AF_L_1.trk, ..., config.json]
 bundles.combine(atlas_config_for_concatenation).set{file_for_concatenation}
 
-process Concatenating_Bundles {
+process Clean_Bundles {
     memory '5 GB'
 
     input:
