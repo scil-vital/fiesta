@@ -127,7 +127,7 @@ process Register_Anat {
 tractogram.join(transformation_for_tractogram).set{tractogram_registration} 
 
 process Register_Streamlines {
-    memory '20 GB'
+    memory '10 GB'
 
     input:
     set sid, file(tractogram), file(affine), file(inverse_warp), file(atlas_anat), file(native_anat) from tractogram_registration
