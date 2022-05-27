@@ -5,7 +5,9 @@ if(params.help) {
     cpu_count = Runtime.runtime.availableProcessors()
 
     bindings = ["register_processes":"$params.register_processes",
-                "cpu_count":"$cpu_count"]
+                "cpu_count":"$cpu_count",
+                "device":"$params.device",
+                "registration_speed":"$params.registration_speed"]
 
     engine = new groovy.text.SimpleTemplateEngine()
     template = engine.createTemplate(usage.text).make(bindings)
@@ -35,10 +37,16 @@ log.info ""
 log.info "Model file: $params.model"
 log.info ""
 log.info "[Atlas]"
+log.info ""
 log.info "Atlas Config: $params.atlas_config"
 log.info "Atlas Anat: $params.atlas_anat"
 log.info "Atlas Directory: $params.atlas_directory"
 log.info "Atlas Thresholds: $params.atlas_thresholds"
+log.info ""
+log.info "[Processing]"
+log.info ""
+log.info "Device: $params.device"
+log.info "Registration speed: $params.registration_speed"
 log.info ""
 
 workflow.onComplete {
@@ -64,15 +72,31 @@ if (!(params.atlas_anat) || !(params.atlas_config) || !(params.atlas_directory) 
     "--atlas_config, --atlas_directory and atlas_thresholds all are mandatory."
 }
 
+if (!params.device.equals("cpu") && !params.device.equals("cuda")){
+    error "Device must either be cpu or cuda. "
+}
+
+if (params.registration_speed == 1){
+    registration_script = Channel.value("antsRegistrationSyNQuick.sh")
+}
+else if (params.registration_speed == 0){
+    registration_script = Channel.value("antsRegistrationSyN.sh")
+}
+else {
+    error "Registration speed must be 0 or 1"
+}
+
 atlas_anat = Channel.fromPath("$params.atlas_anat")
 
 Channel.fromPath("$params.atlas_config").into{atlas_config; atlas_config_for_concatenation}
 atlas_directory = Channel.fromPath("$params.atlas_directory")
 model = Channel.fromPath("$params.model")
 atlas_thresholds = Channel.fromPath("$params.atlas_thresholds")
+device = Channel.value("$params.device")
 
 reference
     .combine(atlas_anat)
+    .combine(registration_script)
     .set{reference_atlas_anat} // [sid, t1.nii.gz, atlas.nii.gz]
 
 tractogram_for_check
@@ -107,20 +131,22 @@ checked_files.view()
     memory '2 GB'
 
     input:
-    set sid, file(reference), file(atlas_anat) from reference_atlas_anat // [sid, t1.nii.gz, atlas.nii.gz]
+    set sid, file(reference), file(atlas_anat), val(registration_script) from reference_atlas_anat // [sid, t1.nii.gz, atlas.nii.gz]
 
     output:
     // [sid, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
     set sid, "${sid}__output0GenericAffine.mat", 
         "${sid}__output1InverseWarp.nii.gz", 
         "${atlas_anat}", 
-        "${reference}" into transformation_for_tractogram 
+        "${sid}__native_anat.nii.gz" into transformation_for_tractogram 
     file "${sid}__outputWarped.nii.gz"
+    file "${sid}__output1Warp.nii.gz"
 
     script:
     """
     export ANTS_RANDOM_SEED=1234
-    antsRegistrationSyNQuick.sh -d 3 -f ${atlas_anat} -m ${reference} -o ${sid}__output -t s -n ${params.register_processes}
+    ${registration_script} -d 3 -f ${atlas_anat} -m ${reference} -o ${sid}__output -t s -n ${params.register_processes}
+    mv ${reference} ${sid}__native_anat.nii.gz
     """
 }
 
@@ -128,7 +154,7 @@ checked_files.view()
 tractogram.join(transformation_for_tractogram).set{tractogram_registration} 
 
 process Register_Streamlines {
-    memory '20 GB'
+    memory '10 GB'
 
     input:
     set sid, file(tractogram), file(affine), file(inverse_warp), file(atlas_anat), file(native_anat) from tractogram_registration
@@ -165,6 +191,7 @@ tractogram_registered
     .combine(atlas_thresholds)
     .combine(atlas_directory)
     .combine(atlas_config)
+    .combine(device)
     .set{filtering_channels}
 
 process Filter_Streamlines {
@@ -172,7 +199,16 @@ process Filter_Streamlines {
     memory '30 GB'
 
     input:
-    set sid, file(tractogram), file(atlas_anat), file(native_tractogram), file(native_anat), file(model), file(thresholds), file(atlas_directory), file(atlas_config) from filtering_channels
+    set sid, 
+        file(tractogram), 
+        file(atlas_anat), 
+        file(native_tractogram), 
+        file(native_anat), 
+        file(model), 
+        file(thresholds), 
+        file(atlas_directory), 
+        file(atlas_config), 
+        val(device) from filtering_channels
 
     output:
     set sid, "*.trk" into bundles // [sid, AC_0.trk, AC_1.trk, ..., AF_L_0.trk, AF_L_1.trk, ...]
@@ -182,14 +218,14 @@ process Filter_Streamlines {
     filter_streamline.py ${tractogram} ${atlas_directory} \
         ${model} ${atlas_anat} \
         ${thresholds} ${atlas_config} . \
-        --original_tractogram ${native_tractogram} --original_reference ${native_anat}  -d cuda -b 500000 -f -vv
+        --original_tractogram ${native_tractogram} --original_reference ${native_anat}  -d ${device} -b 500000 -f -vv
     """
 }
 
 // [sid, AC_0.trk, AC_1.trk, ..., AF_L_0.trk, AF_L_1.trk, ..., config.json]
 bundles.combine(atlas_config_for_concatenation).set{file_for_concatenation}
 
-process Concatenating_Bundles {
+process Clean_Bundles {
     memory '5 GB'
 
     input:

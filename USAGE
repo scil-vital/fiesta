@@ -38,6 +38,11 @@ DESCRIPTION
 
     --output_dir                            Directory where to write the final results.
                                             By default, will be in "./results"
+    --device                                On which device pytorch inference is done ( cuda|cpu )
+                                            Default: (cpu) -> Using: ($device)
+
+    --registration_speed                    Registration speed 0 = antsRegsitrationSyN.sh, 1 = antsRegsitrationSyNQuick.sh
+                                            Default: (1) -> Using: ($registration_speed)
 
 NOTES
 
