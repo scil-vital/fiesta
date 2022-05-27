@@ -94,10 +94,10 @@ model = Channel.fromPath("$params.model")
 atlas_thresholds = Channel.fromPath("$params.atlas_thresholds")
 device = Channel.value("$params.device")
 
-reference
+/*reference
     .combine(atlas_anat)
     .combine(registration_script)
-    .set{reference_atlas_anat} // [sid, t1.nii.gz, atlas.nii.gz]
+    .set{reference_atlas_anat}*/ // [sid, t1.nii.gz, atlas.nii.gz]
 
 tractogram_for_check
     .join(reference_for_check)
@@ -112,7 +112,7 @@ process Check_Files_Compatibility {
 
     output:
     // [sid, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
-    set sid, tractogram, reference into checked_files 
+    set sid into sid_registration, sid_apply_registration
 
     script:
     """
@@ -124,9 +124,14 @@ process Check_Files_Compatibility {
     """
 }
 
-checked_files.view()
+sid_registration
+    .join(reference)
+    .combine(atlas_anat)
+    .combine(registration_script)
+    .set{reference_atlas_anat}
 
-/*process Register_Anat {
+
+process Register_Anat {
     cpus params.register_processes
     memory '2 GB'
 
@@ -147,11 +152,15 @@ checked_files.view()
     export ANTS_RANDOM_SEED=1234
     ${registration_script} -d 3 -f ${atlas_anat} -m ${reference} -o ${sid}__output -t s -n ${params.register_processes}
     mv ${reference} ${sid}__native_anat.nii.gz
+
     """
 }
 
 // [sid, tractogram.trk, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
-tractogram.join(transformation_for_tractogram).set{tractogram_registration} 
+sid_apply_registration
+    .join(tractogram)
+    .join(transformation_for_tractogram)
+    .set{tractogram_registration} 
 
 process Register_Streamlines {
     memory '10 GB'
@@ -269,4 +278,4 @@ process Visualize_Bundles {
     export OPENBLAS_NUM_THREADS=1
     scil_visualize_bundles_mosaic.py ${anat} ${bundles} ${sid}__bundles.png
     """
-}*/
+}
