@@ -94,11 +94,6 @@ model = Channel.fromPath("$params.model")
 atlas_thresholds = Channel.fromPath("$params.atlas_thresholds")
 device = Channel.value("$params.device")
 
-/*reference
-    .combine(atlas_anat)
-    .combine(registration_script)
-    .set{reference_atlas_anat}*/ // [sid, t1.nii.gz, atlas.nii.gz]
-
 tractogram_for_check
     .join(reference_for_check)
     .set{compatibility_check}
