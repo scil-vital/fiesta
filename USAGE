@@ -19,7 +19,9 @@ DESCRIPTION
 
                                         [root]
                                         ├── S1
-                                        │   ├── t1.nii.gz
+                                        │   ├── *t1.nii.gz
+                                        |   ├── *wm.nii.gz
+                                        |   ├── *peaks.nii.gz
                                         │   └── *.trk
                                         └── S2
                                             └── *

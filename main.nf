@@ -63,9 +63,19 @@ Channel
     .into{ tractogram; tractogram_for_check } // [sid, tractogram.trk]
 
 Channel
-    .fromPath("$root/**/*.nii.gz")
+    .fromPath("$root/**/*t1.nii.gz")
     .map{[it.parent.name, it]}
-    .into{ reference; reference_for_display; reference_for_check } // [sid, t1.nii.gz]
+    .into{ reference; reference_for_display_binta; reference_for_display_gesta; reference_for_display_binta_gesta; reference_for_check } // [sid, t1.nii.gz]
+
+Channel
+    .fromPath("$root/**/*wm.nii.gz")
+    .map{[it.parent.name, it]}
+    .into{ wm; wm_for_check } // [sid, wm.nii.gz]
+
+Channel
+    .fromPath("$root/**/*peaks.nii.gz")
+    .map{[it.parent.name, it]}
+    .into{ peaks; peaks_for_check } // [sid, peaks.nii.gz]
 
 if (!(params.atlas_anat) || !(params.atlas_config) || !(params.atlas_directory) || !(params.atlas_thresholds)) {
     error "You must specify all 4 atlas related input. --atlas_anat, " +
@@ -88,14 +98,22 @@ else {
 
 atlas_anat = Channel.fromPath("$params.atlas_anat")
 
-Channel.fromPath("$params.atlas_config").into{atlas_config; atlas_config_for_concatenation}
-atlas_directory = Channel.fromPath("$params.atlas_directory")
-model = Channel.fromPath("$params.model")
-atlas_thresholds = Channel.fromPath("$params.atlas_thresholds")
-device = Channel.value("$params.device")
+Channel.fromPath("$params.atlas_config")
+    .into{atlas_config_for_binta; atlas_config_for_concatenation; atlas_config_for_gesta; atlas_config_for_finta_gesta}
+
+Channel.fromPath("$params.atlas_directory")
+    .into{atlas_directory_for_binta; atlas_directory_for_gesta}
+Channel.fromPath("$params.model")
+    .into{model_for_binta; model_for_gesta}
+Channel.fromPath("$params.atlas_thresholds")
+    .into{atlas_thresholds_for_binta; atlas_thresholds_for_gesta}
+Channel.value("$params.device")
+    .into{device_for_binta; device_for_gesta}
 
 tractogram_for_check
     .join(reference_for_check)
+    .join(wm_for_check)
+    .join(peaks_for_check)
     .set{compatibility_check}
 
 
@@ -103,7 +121,11 @@ process Check_Files_Compatibility {
     errorStrategy 'ignore'
 
     input:
-    set sid, file(tractogram), file(reference) from compatibility_check // [sid, tractogram.trk, t1.nii.gz]
+    set sid, 
+        file(tractogram), 
+        file(reference),
+        file(wm),
+        file(peaks) from compatibility_check // [sid, tractogram.trk, t1.nii.gz, wm.nii.gz, peaks.nii.gz]
 
     output:
     // [sid, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
@@ -111,7 +133,7 @@ process Check_Files_Compatibility {
 
     script:
     """
-    compatibility=\$(scil_verify_space_attributes_compatibility.py ${tractogram} ${reference})
+    compatibility=\$(scil_verify_space_attributes_compatibility.py ${tractogram} ${reference} ${wm} ${peaks})
     if [[ \$compatibility != "All input files have compatible headers." ]]
     then
         exit 1
@@ -138,9 +160,9 @@ process Register_Anat {
     set sid, "${sid}__output0GenericAffine.mat", 
         "${sid}__output1InverseWarp.nii.gz", 
         "${atlas_anat}", 
-        "${sid}__native_anat.nii.gz" into transformation_for_tractogram 
+        "${sid}__native_anat.nii.gz" into transformation_for_tractogram, transformation_for_gesta
+    set sid, "${sid}__output1Warp.nii.gz" into warp_for_gesta
     file "${sid}__outputWarped.nii.gz"
-    file "${sid}__output1Warp.nii.gz"
 
     script:
     """
@@ -191,15 +213,15 @@ process Register_Streamlines {
 // [sid, output.trk, atlas.nii.gz, native.trk, t1.nii.gz, model.pt, thresholds.json, atlas_dir/, config.json]
 tractogram_registered
     .join(tractogram_native)
-    .combine(model)
-    .combine(atlas_thresholds)
-    .combine(atlas_directory)
-    .combine(atlas_config)
-    .combine(device)
+    .combine(model_for_binta)
+    .combine(atlas_thresholds_for_binta)
+    .combine(atlas_directory_for_binta)
+    .combine(atlas_config_for_binta)
+    .combine(device_for_binta)
     .set{filtering_channels}
 
 process Filter_Streamlines {
-    cache false
+    //cache false
     memory '30 GB'
 
     input:
@@ -237,7 +259,7 @@ process Clean_Bundles {
 
     output:
     // [sid, AC.trk, AF_L.trk, ...]
-    set sid, "*.trk" into bundles_concatenated
+    set sid, "*.trk" into bundles_concatenated, bundle_for_gesta, bundles_finta
 
     script:
     """
@@ -252,16 +274,165 @@ process Clean_Bundles {
     """
 }
 
-// [sid, t1.nii.gz, AC.trk, AF_L.trk, ...]
-reference_for_display.join(bundles_concatenated).set{bundles_for_display}
+bundle_for_gesta
+    .join(transformation_for_gesta)
+    .join(warp_for_gesta)
+    .combine(model_for_gesta)
+    .combine(atlas_directory_for_gesta)
+    .combine(atlas_thresholds_for_gesta)
+    .combine(atlas_config_for_gesta)
+    .combine(device_for_gesta)
+    .join(wm)
+    .join(peaks)
+    .set{files_for_gesta}
 
-process Visualize_Bundles {
+process GESTA {
+    memory '10 GB'
+
+    input:
+    set sid, 
+        file(bundles), 
+        file(affine), file(inverse_warp), file(atlas_anat), file(native_anat),
+        file(warp),
+        file(model),
+        file(atlas),
+        file(thresholds),
+        file(config),
+        val(device),
+        file(wm),
+        file(peaks) from files_for_gesta
+
+    output:
+    // [sid, AC.trk, AF_L.trk, ...]
+    set sid, "${sid}_*.trk" into bundles_augmented, bundles_gesta
+    file "${sid}_wm_mni.nii.gz" 
+
+    script:
+    String bundles_list = bundles.join(", ").replace(',', '')
+    """
+    mkdir -p mni 
+
+    for b in ${bundles_list}
+    do
+        scil_apply_transform_to_tractogram.py \${b} ${atlas_anat} \
+        ${affine} mni_\${b} \
+        --inverse --in_deformation ${inverse_warp} -f --keep_invalid
+
+        mv mni_\${b} mni/
+    done
+
+    antsApplyTransforms -d 3 -e 0 -i ${wm} -r ${atlas_anat} -o ${sid}_wm_mni.nii.gz -n NearestNeighbor -t ${warp} -t ${affine} -v 1
+ 
+    generate_streamline.py \
+	--in_bundles_MNI mni/*.trk \
+	--in_bundles_native ${bundles} \
+	--model ${model} \
+	--reference_MNI ${atlas_anat} \
+	--reference_native ${native_anat} \
+	--thresholds_file ${thresholds} \
+	--anatomy_file ${config} \
+	--output . \
+	--atlas_path ${atlas} \
+	-d ${device} \
+	-f -vv -n 20000 --ratio 0.5 0.5 -m 10000 \
+	--wm_parc ${sid}_wm_mni.nii.gz \
+	--peaks ${peaks} \
+	--in_transfo ${affine} \
+	--in_deformation ${warp} \
+    --use_rs \
+    --minL 20 \
+    --maxL 220
+
+    for f in *fodf_mask_20_220.trk;
+    do
+        scil_apply_transform_to_tractogram.py \$f ${native_anat} ${affine} ${sid}_\$f --in_deformation ${warp} --reverse_operation -f -vv
+    done
+
+    """
+}
+
+bundles_finta
+    .join(bundles_gesta)
+    .combine(atlas_config_for_finta_gesta).set{bundles_binta}
+
+
+process BINTA {
+    memory '5 GB'
+
+    input:
+    set sid, file(bundles_finta), file(bundles_gesta), file(config) from bundles_binta
+
+    output:
+    set sid, "${sid}__*concat.trk" into bundles_binta_gesta
+
+    script:
+    """
+    cat ${config} | jq -r '. | keys[]' >keys.txt
+
+    while IFS= read -r value; do
+        count=`ls -1 *\${value}* 2>/dev/null | wc -l`
+        if [[ \$count != 0 ]]; then
+            echo Concatenating *\${value}*
+            scil_streamlines_math.py concatenate *\${value}* ${sid}__\${value}_concat.trk -vv --no_metadata &>warnings.txt
+        fi
+    done <keys.txt
+    """
+}
+
+// [sid, t1.nii.gz, AC.trk, AF_L.trk, ...]
+reference_for_display_binta.join(bundles_concatenated).set{bundles_for_display_binta}
+
+process Visualize_Bundles_BINTA {
     //errorStrategy 'retry'
     //maxRetries 3
     //memory '20 GB'
 
     input:
-    set sid, file(anat), file(bundles) from bundles_for_display
+    set sid, file(anat), file(bundles) from bundles_for_display_binta
+
+    output:
+    file "*png"
+
+    script:
+    """
+    export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=1
+    export OMP_NUM_THREADS=1
+    export OPENBLAS_NUM_THREADS=1
+    scil_visualize_bundles_mosaic.py ${anat} ${bundles} ${sid}__bundles.png
+    """
+}
+
+reference_for_display_gesta.join(bundles_augmented).set{bundles_for_display_gesta}
+
+process Visualize_Bundles_GESTA {
+    //errorStrategy 'retry'
+    //maxRetries 3
+    //memory '20 GB'
+
+    input:
+    set sid, file(anat), file(bundles) from bundles_for_display_gesta
+
+    output:
+    file "*png"
+
+    script:
+    """
+    export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=1
+    export OMP_NUM_THREADS=1
+    export OPENBLAS_NUM_THREADS=1
+    scil_visualize_bundles_mosaic.py ${anat} ${bundles} ${sid}__bundles.png
+    """
+}
+
+reference_for_display_binta_gesta.join(bundles_binta_gesta).set{bundles_for_display_binta_gesta}
+
+process Visualize_Bundles_BINTA_GESTA {
+    //errorStrategy 'retry'
+    //maxRetries 3
+    //memory '20 GB'
+
+    input:
+    set sid, file(anat), file(bundles) from bundles_for_display_binta_gesta
 
     output:
     file "*png"
