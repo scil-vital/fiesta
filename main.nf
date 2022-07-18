@@ -65,7 +65,7 @@ Channel
 Channel
     .fromPath("$root/**/*t1.nii.gz")
     .map{[it.parent.name, it]}
-    .into{ reference; reference_for_display_binta; reference_for_display_gesta; reference_for_display_binta_gesta; reference_for_check } // [sid, t1.nii.gz]
+    .into{ reference; reference_for_display_cinta; reference_for_display_gesta; reference_for_display_binta; reference_for_check } // [sid, t1.nii.gz]
 
 Channel
     .fromPath("$root/**/*wm.nii.gz")
@@ -99,16 +99,16 @@ else {
 atlas_anat = Channel.fromPath("$params.atlas_anat")
 
 Channel.fromPath("$params.atlas_config")
-    .into{atlas_config_for_binta; atlas_config_for_concatenation; atlas_config_for_gesta; atlas_config_for_finta_gesta}
+    .into{atlas_config_for_cinta; atlas_config_for_concatenation; atlas_config_for_gesta; atlas_config_for_finta_gesta}
 
 Channel.fromPath("$params.atlas_directory")
-    .into{atlas_directory_for_binta; atlas_directory_for_gesta}
+    .into{atlas_directory_for_cinta; atlas_directory_for_gesta}
 Channel.fromPath("$params.model")
-    .into{model_for_binta; model_for_gesta}
+    .into{model_for_cinta; model_for_gesta}
 Channel.fromPath("$params.atlas_thresholds")
-    .into{atlas_thresholds_for_binta; atlas_thresholds_for_gesta}
+    .into{atlas_thresholds_for_cinta; atlas_thresholds_for_gesta}
 Channel.value("$params.device")
-    .into{device_for_binta; device_for_gesta}
+    .into{device_for_cinta; device_for_gesta}
 
 tractogram_for_check
     .join(reference_for_check)
@@ -213,14 +213,14 @@ process Register_Streamlines {
 // [sid, output.trk, atlas.nii.gz, native.trk, t1.nii.gz, model.pt, thresholds.json, atlas_dir/, config.json]
 tractogram_registered
     .join(tractogram_native)
-    .combine(model_for_binta)
-    .combine(atlas_thresholds_for_binta)
-    .combine(atlas_directory_for_binta)
-    .combine(atlas_config_for_binta)
-    .combine(device_for_binta)
-    .set{filtering_channels}
+    .combine(model_for_cinta)
+    .combine(atlas_thresholds_for_cinta)
+    .combine(atlas_directory_for_cinta)
+    .combine(atlas_config_for_cinta)
+    .combine(device_for_cinta)
+    .set{files_for_cinta}
 
-process Filter_Streamlines {
+process CINTA {
     //cache false
     memory '30 GB'
 
@@ -234,7 +234,7 @@ process Filter_Streamlines {
         file(thresholds), 
         file(atlas_directory), 
         file(atlas_config), 
-        val(device) from filtering_channels
+        val(device) from files_for_cinta
 
     output:
     set sid, "*.trk" into bundles // [sid, AC_0.trk, AC_1.trk, ..., AF_L_0.trk, AF_L_1.trk, ...]
@@ -259,7 +259,7 @@ process Clean_Bundles {
 
     output:
     // [sid, AC.trk, AF_L.trk, ...]
-    set sid, "*.trk" into bundles_concatenated, bundle_for_gesta, bundles_finta
+    set sid, "*.trk" into bundles_concatenated, bundle_for_gesta, bundles_cinta
 
     script:
     """
@@ -334,14 +334,15 @@ process GESTA {
 	--output . \
 	--atlas_path ${atlas} \
 	-d ${device} \
-	-f -vv -n 20000 --ratio 0.5 0.5 -m 10000 \
+	-f -vv -n 100000 --ratio 0.5 0.5 -m 10000 \
 	--wm_parc ${sid}_wm_mni.nii.gz \
 	--peaks ${peaks} \
 	--in_transfo ${affine} \
 	--in_deformation ${warp} \
     --use_rs \
     --minL 20 \
-    --maxL 220
+    --maxL 220 \
+    -a
 
     for f in *fodf_mask_20_220.trk;
     do
@@ -351,19 +352,19 @@ process GESTA {
     """
 }
 
-bundles_finta
+bundles_cinta
     .join(bundles_gesta)
-    .combine(atlas_config_for_finta_gesta).set{bundles_binta}
+    .combine(atlas_config_for_finta_gesta).set{bundles_for_binta}
 
 
 process BINTA {
     memory '5 GB'
 
     input:
-    set sid, file(bundles_finta), file(bundles_gesta), file(config) from bundles_binta
+    set sid, file(bundles_finta), file(bundles_gesta), file(config) from bundles_for_binta
 
     output:
-    set sid, "${sid}__*concat.trk" into bundles_binta_gesta
+    set sid, "${sid}__*concat.trk" into bundles_binta
 
     script:
     """
@@ -380,15 +381,15 @@ process BINTA {
 }
 
 // [sid, t1.nii.gz, AC.trk, AF_L.trk, ...]
-reference_for_display_binta.join(bundles_concatenated).set{bundles_for_display_binta}
+reference_for_display_cinta.join(bundles_concatenated).set{bundles_for_display_cinta}
 
-process Visualize_Bundles_BINTA {
+process Visualize_Bundles_CINTA {
     //errorStrategy 'retry'
     //maxRetries 3
     //memory '20 GB'
 
     input:
-    set sid, file(anat), file(bundles) from bundles_for_display_binta
+    set sid, file(anat), file(bundles) from bundles_for_display_cinta
 
     output:
     file "*png"
@@ -424,15 +425,15 @@ process Visualize_Bundles_GESTA {
     """
 }
 
-reference_for_display_binta_gesta.join(bundles_binta_gesta).set{bundles_for_display_binta_gesta}
+reference_for_display_binta.join(bundles_binta).set{bundles_for_display_binta}
 
-process Visualize_Bundles_BINTA_GESTA {
+process Visualize_Bundles_BINTA {
     //errorStrategy 'retry'
     //maxRetries 3
     //memory '20 GB'
 
     input:
-    set sid, file(anat), file(bundles) from bundles_for_display_binta_gesta
+    set sid, file(anat), file(bundles) from bundles_for_display_binta
 
     output:
     file "*png"
