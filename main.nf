@@ -7,7 +7,10 @@ if(params.help) {
     bindings = ["register_processes":"$params.register_processes",
                 "cpu_count":"$cpu_count",
                 "device":"$params.device",
-                "registration_speed":"$params.registration_speed"]
+                "registration_speed":"$params.registration_speed",
+                "ratio_atlas_bundle":"$params.ratio_atlas_bundle",
+                "number_rejection_sampling":"$params.number_rejection_sampling",
+                "parzen_window_seeds": "$params.parzen_window_seeds"]
 
     engine = new groovy.text.SimpleTemplateEngine()
     template = engine.createTemplate(usage.text).make(bindings)
@@ -33,20 +36,22 @@ log.info "Options"
 log.info "======="
 log.info ""
 log.info "[Model]"
-log.info ""
 log.info "Model file: $params.model"
 log.info ""
 log.info "[Atlas]"
-log.info ""
 log.info "Atlas Config: $params.atlas_config"
 log.info "Atlas Anat: $params.atlas_anat"
 log.info "Atlas Directory: $params.atlas_directory"
 log.info "Atlas Thresholds: $params.atlas_thresholds"
 log.info ""
 log.info "[Processing]"
-log.info ""
 log.info "Device: $params.device"
 log.info "Registration speed: $params.registration_speed"
+log.info ""
+log.info "[Gesta]"
+log.info "Ratio Atlas Bundle: $params.ratio_atlas_bundle"
+log.info "Number Rejection Sampling: $params.number_rejection_sampling"
+log.info "Number of Parzen Window seeds: $params.parzen_window_seeds"
 log.info ""
 
 workflow.onComplete {
@@ -70,7 +75,7 @@ Channel
 Channel
     .fromPath("$root/**/*wm.nii.gz")
     .map{[it.parent.name, it]}
-    .into{ wm; wm_for_check } // [sid, wm.nii.gz]
+    .into{ wm; wm_for_check; wm_for_filtering } // [sid, wm.nii.gz]
 
 Channel
     .fromPath("$root/**/*peaks.nii.gz")
@@ -221,7 +226,7 @@ tractogram_registered
     .set{files_for_cinta}
 
 process CINTA {
-    //cache false
+    // cache false
     memory '30 GB'
 
     input:
@@ -251,7 +256,7 @@ process CINTA {
 // [sid, AC_0.trk, AC_1.trk, ..., AF_L_0.trk, AF_L_1.trk, ..., config.json]
 bundles.combine(atlas_config_for_concatenation).set{file_for_concatenation}
 
-process Clean_Bundles {
+process Concatenating_CINTA {
     memory '5 GB'
 
     input:
@@ -334,7 +339,7 @@ process GESTA {
 	--output . \
 	--atlas_path ${atlas} \
 	-d ${device} \
-	-f -vv -n 100000 --ratio 0.5 0.5 -m 10000 \
+	-f -vv -n $params.number_rejection_sampling --ratio $params.ratio_atlas_bundle -m $params.parzen_window_seeds \
 	--wm_parc ${sid}_wm_mni.nii.gz \
 	--peaks ${peaks} \
 	--in_transfo ${affine} \
@@ -377,6 +382,38 @@ process BINTA {
             scil_streamlines_math.py concatenate *\${value}* ${sid}__\${value}_concat.trk -vv --no_metadata &>warnings.txt
         fi
     done <keys.txt
+    """
+}
+
+bundles_binta.join(wm_for_filtering).set{ files_for_filtering }
+
+process Clean_Bundles {
+    memory '5 GB'
+
+    input:
+    set sid, file(bundles_binta), file(wm) from files_for_filtering
+
+    output:
+    set sid, "${sid}__*concat_cleaned.trk" into bundles_binta_cleaned
+    file "eroded_${wm}"
+
+    script:
+    String bundles_list = bundles_binta.join(", ").replace(',', '')
+    """
+    for bundle in ${bundles_list}; 
+    do
+        filename=\$(basename -- "\$bundle")
+        filename="\${filename%.*}"
+
+        scil_count_streamlines.py \${bundle} >streamline_count.json
+        streamline_count=\$(jq --arg keyvar "\${filename}" '.[\$keyvar].streamline_count' streamline_count.json)
+
+        if ((streamline_count>1)); then
+            scil_detect_streamlines_loops.py \$bundle \${filename}_no_loops.trk -a 360 -f
+            scil_image_math.py erosion ${wm} 3 eroded_${wm} -f
+            scil_filter_tractogram.py \${filename}_no_loops.trk \${filename}_cleaned.trk --drawn_roi eroded_${wm} either_end exclude -f
+        fi
+    done
     """
 }
 
@@ -425,7 +462,7 @@ process Visualize_Bundles_GESTA {
     """
 }
 
-reference_for_display_binta.join(bundles_binta).set{bundles_for_display_binta}
+reference_for_display_binta.join(bundles_binta_cleaned).set{bundles_for_display_binta}
 
 process Visualize_Bundles_BINTA {
     //errorStrategy 'retry'
