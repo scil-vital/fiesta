@@ -10,7 +10,8 @@ if(params.help) {
                 "registration_speed":"$params.registration_speed",
                 "ratio_atlas_bundle":"$params.ratio_atlas_bundle",
                 "number_rejection_sampling":"$params.number_rejection_sampling",
-                "parzen_window_seeds": "$params.parzen_window_seeds"]
+                "parzen_window_seeds": "$params.parzen_window_seeds",
+                "max_total_sampling": "$params.max_total_sampling"]
 
     engine = new groovy.text.SimpleTemplateEngine()
     template = engine.createTemplate(usage.text).make(bindings)
@@ -52,6 +53,7 @@ log.info "[Gesta]"
 log.info "Ratio Atlas Bundle: $params.ratio_atlas_bundle"
 log.info "Number Rejection Sampling: $params.number_rejection_sampling"
 log.info "Number of Parzen Window seeds: $params.parzen_window_seeds"
+log.info "Max total sampling: $params.max_total_sampling"
 log.info ""
 
 workflow.onComplete {
@@ -339,7 +341,11 @@ process GESTA {
 	--output . \
 	--atlas_path ${atlas} \
 	-d ${device} \
-	-f -vv -n $params.number_rejection_sampling --ratio $params.ratio_atlas_bundle -m $params.parzen_window_seeds \
+	-f -vv \
+    -n $params.number_rejection_sampling \
+    --max_total_sampling $params.max_total_sampling \
+    --ratio $params.ratio_atlas_bundle \
+    -m $params.parzen_window_seeds \
 	--wm_parc ${sid}_wm_mni.nii.gz \
 	--peaks ${peaks} \
 	--in_transfo ${affine} \
@@ -349,9 +355,18 @@ process GESTA {
     --maxL 220 \
     -a
 
-    for f in *fodf_mask_20_220.trk;
+    for f in *fodf_mask_20_220*.trk;
     do
-        scil_apply_transform_to_tractogram.py \$f ${native_anat} ${affine} ${sid}_\$f --in_deformation ${warp} --reverse_operation -f -vv
+        scil_apply_transform_to_tractogram.py \$f ${native_anat} ${affine} to_concatenate_\$f --in_deformation ${warp} --reverse_operation -f -vv
+    done
+
+    mkdir -p tmp 
+    mv to_concatenate*fodf_mask_20_220*trk tmp
+    cat "${config}" | jq -r '. | keys[]' |
+    while IFS= read -r value; do
+        echo Concatenating tmp/*\${value}* | echo "Done"
+        scil_streamlines_math.py concatenate tmp/*\${value}* \${value}.trk -vv | echo "Done"
+        mv \${value}.trk ${sid}__\${value}_gesta.trk | echo "Done"
     done
 
     """
@@ -369,7 +384,7 @@ process BINTA {
     set sid, file(bundles_finta), file(bundles_gesta), file(config) from bundles_for_binta
 
     output:
-    set sid, "${sid}__*concat.trk" into bundles_binta
+    set sid, "${sid}__*binta.trk" into bundles_binta
 
     script:
     """
@@ -379,7 +394,7 @@ process BINTA {
         count=`ls -1 *\${value}* 2>/dev/null | wc -l`
         if [[ \$count != 0 ]]; then
             echo Concatenating *\${value}*
-            scil_streamlines_math.py concatenate *\${value}* ${sid}__\${value}_concat.trk -vv --no_metadata &>warnings.txt
+            scil_streamlines_math.py concatenate *\${value}* ${sid}__\${value}_binta.trk -vv --no_metadata &>warnings.txt
         fi
     done <keys.txt
     """
@@ -394,7 +409,7 @@ process Clean_Bundles {
     set sid, file(bundles_binta), file(wm) from files_for_filtering
 
     output:
-    set sid, "${sid}__*concat_cleaned.trk" into bundles_binta_cleaned
+    set sid, "${sid}__*binta_cleaned.trk" into bundles_binta_cleaned
     file "eroded_${wm}"
 
     script:
