@@ -11,7 +11,8 @@ if(params.help) {
                 "ratio_atlas_bundle":"$params.ratio_atlas_bundle",
                 "number_rejection_sampling":"$params.number_rejection_sampling",
                 "parzen_window_seeds": "$params.parzen_window_seeds",
-                "max_total_sampling": "$params.max_total_sampling"]
+                "max_total_sampling": "$params.max_total_sampling",
+                "batch_sampling": "$params.batch_sampling"]
 
     engine = new groovy.text.SimpleTemplateEngine()
     template = engine.createTemplate(usage.text).make(bindings)
@@ -54,6 +55,7 @@ log.info "Ratio Atlas Bundle: $params.ratio_atlas_bundle"
 log.info "Number Rejection Sampling: $params.number_rejection_sampling"
 log.info "Number of Parzen Window seeds: $params.parzen_window_seeds"
 log.info "Max total sampling: $params.max_total_sampling"
+log.info "Batch sampling: $params.batch_sampling"
 log.info ""
 
 workflow.onComplete {
@@ -294,7 +296,7 @@ bundle_for_gesta
     .set{files_for_gesta}
 
 process GESTA {
-    memory '10 GB'
+    memory '20 GB'
 
     input:
     set sid, 
@@ -351,6 +353,7 @@ process GESTA {
 	--in_transfo ${affine} \
 	--in_deformation ${warp} \
     --use_rs \
+    --batch_sampling $params.batch_sampling \
     --minL 20 \
     --maxL 220 \
     -a

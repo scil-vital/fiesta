@@ -39,6 +39,7 @@ DESCRIPTION
 
     --max_total_sampling                    Maximum of sampled streamlines. In general, if number_rejection_sampling is smaller
                                             than 10%, we should stop ($max_total_sampling).
+    --batch_sampling                        Batch used for the RS ($batch_sampling).
 
     --ratio_atlas_bundle                    Seed composition (subject bundle|atlas bundle) that the Parzen Window is based on ($ratio_atlas_bundle).
                                             If too few streamlines are clustered the ratio might not be respected

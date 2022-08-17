@@ -6,3 +6,5 @@ config*
 input*/
 *.sif
 threshold*/
+*png
+*scrap/
