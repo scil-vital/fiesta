@@ -12,7 +12,8 @@ if(params.help) {
                 "number_rejection_sampling":"$params.number_rejection_sampling",
                 "parzen_window_seeds": "$params.parzen_window_seeds",
                 "max_total_sampling": "$params.max_total_sampling",
-                "batch_sampling": "$params.batch_sampling"]
+                "batch_sampling": "$params.batch_sampling",
+                "degree": "$params.degree"]
 
     engine = new groovy.text.SimpleTemplateEngine()
     template = engine.createTemplate(usage.text).make(bindings)
@@ -254,6 +255,16 @@ process CINTA {
         ${model} ${atlas_anat} \
         ${thresholds} ${atlas_config} . \
         --original_tractogram ${native_tractogram} --original_reference ${native_anat}  -d ${device} -b 500000 -f -vv
+
+    mkdir tmp
+    mv *trk tmp
+    mv -t . tmp/${native_tractogram} tmp/${tractogram}
+
+    if [ -z "\$(ls -A tmp)" ]; then
+        touch empty.trk
+    else
+        mv tmp/* .
+    fi
     """
 }
 
@@ -272,14 +283,24 @@ process Concatenating_CINTA {
 
     script:
     """
+    mkdir cat_bundles
     mkdir -p tmp 
     mv ${bundles} tmp
     cat "${atlas_config}" | jq -r '. | keys[]' |
     while IFS= read -r value; do
         echo Concatenating tmp/*\${value}* | echo "Done"
         scil_streamlines_math.py concatenate tmp/*\${value}* \${value}.trk -vv | echo "Done"
-        mv \${value}.trk ${sid}__\${value}.trk | echo "Done"
+        mv \${value}.trk cat_bundles/${sid}__\${value}.trk | echo "Done"
     done
+
+    if [ -z "\$(ls -A cat_bundles)" ]; then
+        echo "Empty !"
+        touch empty_0.trk
+    else
+        echo "Not Empty !"
+        mv cat_bundles/* .
+    fi
+
     """
 }
 
@@ -323,15 +344,18 @@ process GESTA {
 
     for b in ${bundles_list}
     do
-        scil_apply_transform_to_tractogram.py \${b} ${atlas_anat} \
-        ${affine} mni_\${b} \
-        --inverse --in_deformation ${inverse_warp} -f --keep_invalid
+        if [[ \$b != *"empty"* ]]; then
+            echo \${b}
+            scil_apply_transform_to_tractogram.py \${b} ${atlas_anat} \
+            ${affine} mni_\${b} \
+            --inverse --in_deformation ${inverse_warp} -f --keep_invalid
 
-        mv mni_\${b} mni/
+            mv mni_\${b} mni/
+        fi
     done
 
     antsApplyTransforms -d 3 -e 0 -i ${wm} -r ${atlas_anat} -o ${sid}_wm_mni.nii.gz -n NearestNeighbor -t ${warp} -t ${affine} -v 1
- 
+    
     generate_streamline.py \
 	--in_bundles_MNI mni/*.trk \
 	--in_bundles_native ${bundles} \
@@ -348,7 +372,7 @@ process GESTA {
     --max_total_sampling $params.max_total_sampling \
     --ratio $params.ratio_atlas_bundle \
     -m $params.parzen_window_seeds \
-	--wm_parc ${sid}_wm_mni.nii.gz \
+	--wm_parc_MNI ${sid}_wm_mni.nii.gz \
 	--peaks ${peaks} \
 	--in_transfo ${affine} \
 	--in_deformation ${warp} \
@@ -356,6 +380,7 @@ process GESTA {
     --batch_sampling $params.batch_sampling \
     --minL 20 \
     --maxL 220 \
+    --degree $params.degree \
     -a
 
     for f in *fodf_mask_20_220*.trk;
@@ -418,6 +443,7 @@ process Clean_Bundles {
     script:
     String bundles_list = bundles_binta.join(", ").replace(',', '')
     """
+    scil_image_math.py convert ${wm} ${wm} --data_type int16 -f
     for bundle in ${bundles_list}; 
     do
         filename=\$(basename -- "\$bundle")
@@ -439,7 +465,7 @@ process Clean_Bundles {
 reference_for_display_cinta.join(bundles_concatenated).set{bundles_for_display_cinta}
 
 process Visualize_Bundles_CINTA {
-    //errorStrategy 'retry'
+    errorStrategy 'ignore'
     //maxRetries 3
     //memory '20 GB'
 
@@ -461,7 +487,7 @@ process Visualize_Bundles_CINTA {
 reference_for_display_gesta.join(bundles_augmented).set{bundles_for_display_gesta}
 
 process Visualize_Bundles_GESTA {
-    //errorStrategy 'retry'
+    errorStrategy 'ignore'
     //maxRetries 3
     //memory '20 GB'
 
@@ -483,7 +509,7 @@ process Visualize_Bundles_GESTA {
 reference_for_display_binta.join(bundles_binta_cleaned).set{bundles_for_display_binta}
 
 process Visualize_Bundles_BINTA {
-    //errorStrategy 'retry'
+    errorStrategy 'ignore'
     //maxRetries 3
     //memory '20 GB'
 
