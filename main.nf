@@ -57,6 +57,7 @@ log.info "Number Rejection Sampling: $params.number_rejection_sampling"
 log.info "Number of Parzen Window seeds: $params.parzen_window_seeds"
 log.info "Max total sampling: $params.max_total_sampling"
 log.info "Batch sampling: $params.batch_sampling"
+log.info "Acceptance angle: $params.degree"
 log.info ""
 
 workflow.onComplete {
