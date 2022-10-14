@@ -13,7 +13,8 @@ if(params.help) {
                 "parzen_window_seeds": "$params.parzen_window_seeds",
                 "max_total_sampling": "$params.max_total_sampling",
                 "batch_sampling": "$params.batch_sampling",
-                "degree": "$params.degree"]
+                "degree": "$params.degree",
+                "fa_threshold": "$fa_threshold"]
 
     engine = new groovy.text.SimpleTemplateEngine()
     template = engine.createTemplate(usage.text).make(bindings)
@@ -21,7 +22,7 @@ if(params.help) {
     return
 }
 
-log.info "FINTA Flow"
+log.info "BINTA Flow"
 log.info "==============================================="
 log.info ""
 log.info "Start time: $workflow.start"
@@ -52,12 +53,14 @@ log.info "Device: $params.device"
 log.info "Registration speed: $params.registration_speed"
 log.info ""
 log.info "[Gesta]"
-log.info "Ratio Atlas Bundle: $params.ratio_atlas_bundle"
-log.info "Number Rejection Sampling: $params.number_rejection_sampling"
+log.info "Ratio Atlas Bundle Config: $params.ratio_atlas_bundle_config"
+log.info "Number Rejection Sampling Config: $params.number_rejection_sampling_config"
 log.info "Number of Parzen Window seeds: $params.parzen_window_seeds"
-log.info "Max total sampling: $params.max_total_sampling"
+log.info "Max total sampling config: $params.max_total_sampling_config"
 log.info "Batch sampling: $params.batch_sampling"
-log.info "Acceptance angle: $params.degree"
+log.info "Acceptance angle config: $params.degree_config"
+log.info "WM config $params.white_matter_config"
+log.info "FA Threshold : $params.fa_threshold"
 log.info ""
 
 workflow.onComplete {
@@ -82,6 +85,11 @@ Channel
     .fromPath("$root/**/*wm.nii.gz")
     .map{[it.parent.name, it]}
     .into{ wm; wm_for_check; wm_for_filtering } // [sid, wm.nii.gz]
+
+Channel
+    .fromPath("$root/**/*fa.nii.gz")
+    .map{[it.parent.name, it]}
+    .into{ fa; fa_for_check; fa_for_filtering } // [sid, fa.nii.gz]
 
 Channel
     .fromPath("$root/**/*peaks.nii.gz")
@@ -114,10 +122,28 @@ Channel.fromPath("$params.atlas_config")
 
 Channel.fromPath("$params.atlas_directory")
     .into{atlas_directory_for_cinta; atlas_directory_for_gesta}
+
 Channel.fromPath("$params.model")
     .into{model_for_cinta; model_for_gesta}
+
 Channel.fromPath("$params.atlas_thresholds")
     .into{atlas_thresholds_for_cinta; atlas_thresholds_for_gesta}
+
+Channel.fromPath("$params.number_rejection_sampling_config")
+    .set{number_rejection_sampling}
+
+Channel.fromPath("$params.max_total_sampling_config")
+    .set{max_total_sampling}
+
+Channel.fromPath("$params.ratio_atlas_bundle_config")
+    .set{ratio_atlas_bundle}
+
+Channel.fromPath("$params.degree_config")
+    .set{degree}
+
+Channel.fromPath("$params.white_matter_config")
+    .set{white_matter}
+
 Channel.value("$params.device")
     .into{device_for_cinta; device_for_gesta}
 
@@ -125,6 +151,7 @@ tractogram_for_check
     .join(reference_for_check)
     .join(wm_for_check)
     .join(peaks_for_check)
+    .join(fa_for_check)
     .set{compatibility_check}
 
 
@@ -136,7 +163,8 @@ process Check_Files_Compatibility {
         file(tractogram), 
         file(reference),
         file(wm),
-        file(peaks) from compatibility_check // [sid, tractogram.trk, t1.nii.gz, wm.nii.gz, peaks.nii.gz]
+        file(peaks),
+        file(fa) from compatibility_check // [sid, tractogram.trk, t1.nii.gz, wm.nii.gz, peaks.nii.gz, fa.nii.gz]
 
     output:
     // [sid, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
@@ -144,7 +172,7 @@ process Check_Files_Compatibility {
 
     script:
     """
-    compatibility=\$(scil_verify_space_attributes_compatibility.py ${tractogram} ${reference} ${wm} ${peaks})
+    compatibility=\$(scil_verify_space_attributes_compatibility.py ${tractogram} ${reference} ${wm} ${peaks} ${fa})
     if [[ \$compatibility != "All input files have compatible headers." ]]
     then
         exit 1
@@ -191,7 +219,7 @@ sid_apply_registration
     .set{tractogram_registration} 
 
 process Register_Streamlines {
-    memory '10 GB'
+    memory '30 GB'
 
     input:
     set sid, file(tractogram), file(affine), file(inverse_warp), file(atlas_anat), file(native_anat) from tractogram_registration
@@ -264,6 +292,7 @@ process CINTA {
     if [ -z "\$(ls -A tmp)" ]; then
         touch empty.trk
     else
+        rm tmp/*implausible* | echo "Done"
         mv tmp/* .
     fi
     """
@@ -313,12 +342,18 @@ bundle_for_gesta
     .combine(atlas_thresholds_for_gesta)
     .combine(atlas_config_for_gesta)
     .combine(device_for_gesta)
+    .combine(number_rejection_sampling)
+    .combine(max_total_sampling)
+    .combine(degree)
+    .combine(ratio_atlas_bundle)
+    .combine(white_matter)
     .join(wm)
     .join(peaks)
+    .join(fa)
     .set{files_for_gesta}
 
 process GESTA {
-    memory '20 GB'
+    memory '30 GB'
 
     input:
     set sid, 
@@ -330,17 +365,25 @@ process GESTA {
         file(thresholds),
         file(config),
         val(device),
+        file(number_rejection_sampling),
+        file(max_total_sampling),
+        file(degree),
+        file(ratio_atlas_bundle),
+        file(white_matter),
         file(wm),
-        file(peaks) from files_for_gesta
+        file(peaks),
+        file(fa) from files_for_gesta
 
     output:
     // [sid, AC.trk, AF_L.trk, ...]
     set sid, "${sid}_*.trk" into bundles_augmented, bundles_gesta
     file "${sid}_wm_mni.nii.gz" 
+    file "${sid}_fa_mni.nii.gz" 
 
     script:
     String bundles_list = bundles.join(", ").replace(',', '')
     """
+    echo $number_rejection_sampling
     mkdir -p mni 
 
     for b in ${bundles_list}
@@ -356,6 +399,7 @@ process GESTA {
     done
 
     antsApplyTransforms -d 3 -e 0 -i ${wm} -r ${atlas_anat} -o ${sid}_wm_mni.nii.gz -n NearestNeighbor -t ${warp} -t ${affine} -v 1
+    antsApplyTransforms -d 3 -e 0 -i ${fa} -r ${atlas_anat} -o ${sid}_fa_mni.nii.gz -n Linear -t ${warp} -t ${affine} -v 1
     
     generate_streamline.py \
 	--in_bundles_MNI mni/*.trk \
@@ -369,11 +413,12 @@ process GESTA {
 	--atlas_path ${atlas} \
 	-d ${device} \
 	-f -vv \
-    -n $params.number_rejection_sampling \
-    --max_total_sampling $params.max_total_sampling \
-    --ratio $params.ratio_atlas_bundle \
+    -n ${number_rejection_sampling} \
+    --max_total_sampling ${max_total_sampling} \
+    --ratio ${ratio_atlas_bundle} \
     -m $params.parzen_window_seeds \
 	--wm_parc_MNI ${sid}_wm_mni.nii.gz \
+    --fa_MNI ${sid}_fa_mni.nii.gz \
 	--peaks ${peaks} \
 	--in_transfo ${affine} \
 	--in_deformation ${warp} \
@@ -381,8 +426,10 @@ process GESTA {
     --batch_sampling $params.batch_sampling \
     --minL 20 \
     --maxL 220 \
-    --degree $params.degree \
-    -a
+    --degree ${degree} \
+    -a \
+    --threshold_fa $params.fa_threshold \
+    --white_matter_config ${white_matter}
 
     for f in *fodf_mask_20_220*.trk;
     do
@@ -423,7 +470,7 @@ process BINTA {
         count=`ls -1 *\${value}* 2>/dev/null | wc -l`
         if [[ \$count != 0 ]]; then
             echo Concatenating *\${value}*
-            scil_streamlines_math.py concatenate *\${value}* ${sid}__\${value}_binta.trk -vv --no_metadata &>warnings.txt
+            scil_streamlines_math.py concatenate *\${value}* ${sid}__\${value}_binta.trk -vv --no_metadata --ignore_invalid &>warnings.txt
         fi
     done <keys.txt
     """
@@ -454,7 +501,11 @@ process Clean_Bundles {
         streamline_count=\$(jq --arg keyvar "\${filename}" '.[\$keyvar].streamline_count' streamline_count.json)
 
         if ((streamline_count>1)); then
-            scil_detect_streamlines_loops.py \$bundle \${filename}_no_loops.trk -a 360 -f
+            echo \${streamline_count}
+            scil_remove_invalid_streamlines.py \${bundle} \${filename}_no_invalid.trk
+            scil_count_streamlines.py \${filename}_no_invalid.trk
+
+            scil_detect_streamlines_loops.py \${filename}_no_invalid.trk \${filename}_no_loops.trk -a 360 -f
             scil_image_math.py erosion ${wm} 3 eroded_${wm} -f
             scil_filter_tractogram.py \${filename}_no_loops.trk \${filename}_cleaned.trk --drawn_roi eroded_${wm} either_end exclude -f
         fi
