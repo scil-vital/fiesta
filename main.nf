@@ -219,7 +219,7 @@ sid_apply_registration
     .set{tractogram_registration} 
 
 process Register_Streamlines {
-    memory '30 GB'
+    memory '10 GB'
 
     input:
     set sid, file(tractogram), file(affine), file(inverse_warp), file(atlas_anat), file(native_anat) from tractogram_registration
@@ -261,7 +261,7 @@ tractogram_registered
 
 process CINTA {
     // cache false
-    memory '30 GB'
+    memory '15 GB'
 
     input:
     set sid, 
@@ -302,7 +302,7 @@ process CINTA {
 bundles.combine(atlas_config_for_concatenation).set{file_for_concatenation}
 
 process Concatenating_CINTA {
-    memory '5 GB'
+    memory '2 GB'
 
     input:
     set sid, file(bundles), file(atlas_config) from file_for_concatenation
@@ -316,11 +316,21 @@ process Concatenating_CINTA {
     mkdir cat_bundles
     mkdir -p tmp 
     mv ${bundles} tmp
+    cwd=\$(pwd)
     cat "${atlas_config}" | jq -r '. | keys[]' |
     while IFS= read -r value; do
-        echo Concatenating tmp/*\${value}* | echo "Done"
-        scil_streamlines_math.py concatenate tmp/*\${value}* \${value}.trk -vv | echo "Done"
-        mv \${value}.trk cat_bundles/${sid}__\${value}.trk | echo "Done"
+        if [[ -n "\$(ls -A tmp/*\${value}* 2>/dev/null)" ]]; then
+            echo Concatenating tmp/*\${value}*
+            cd tmp
+            for v in *\${value}*; do
+                scil_count_streamlines.py \${v}
+                scil_remove_invalid_streamlines.py \${v} no_invalid_\${v}
+                scil_count_streamlines.py no_invalid_\${v}
+            done
+            cd \${cwd}
+            scil_streamlines_math.py concatenate tmp/no_invalid*\${value}* \${value}.trk -vv
+            mv \${value}.trk cat_bundles/${sid}__\${value}.trk
+        fi
     done
 
     if [ -z "\$(ls -A cat_bundles)" ]; then
@@ -353,7 +363,7 @@ bundle_for_gesta
     .set{files_for_gesta}
 
 process GESTA {
-    memory '30 GB'
+    memory '15 GB'
 
     input:
     set sid, 
