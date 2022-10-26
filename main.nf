@@ -527,7 +527,7 @@ process Clean_Bundles {
 reference_for_display_cinta.join(bundles_concatenated).set{bundles_for_display_cinta}
 
 process Visualize_Bundles_CINTA {
-    errorStrategy 'ignore'
+    // errorStrategy 'ignore'
     //maxRetries 3
     //memory '20 GB'
 
@@ -549,7 +549,7 @@ process Visualize_Bundles_CINTA {
 reference_for_display_gesta.join(bundles_augmented).set{bundles_for_display_gesta}
 
 process Visualize_Bundles_GESTA {
-    errorStrategy 'ignore'
+    // errorStrategy 'ignore'
     //maxRetries 3
     //memory '20 GB'
 
@@ -571,7 +571,7 @@ process Visualize_Bundles_GESTA {
 reference_for_display_binta.join(bundles_binta_cleaned).set{bundles_for_display_binta}
 
 process Visualize_Bundles_BINTA {
-    errorStrategy 'ignore'
+    // errorStrategy 'ignore'
     //maxRetries 3
     //memory '20 GB'
 
