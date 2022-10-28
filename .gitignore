@@ -8,3 +8,7 @@ input*/
 threshold*/
 *png
 *scrap/
+report*
+trace*
+debug
+containers
