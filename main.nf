@@ -8,13 +8,15 @@ if(params.help) {
                 "cpu_count":"$cpu_count",
                 "device":"$params.device",
                 "registration_speed":"$params.registration_speed",
-                "ratio_atlas_bundle":"$params.ratio_atlas_bundle",
-                "number_rejection_sampling":"$params.number_rejection_sampling",
+                "ratio_atlas_bundle":"$params.ratio_atlas_bundle_config",
+                "number_rejection_sampling":"$params.number_rejection_sampling_config",
                 "parzen_window_seeds": "$params.parzen_window_seeds",
-                "max_total_sampling": "$params.max_total_sampling",
+                "max_total_sampling": "$params.max_total_sampling_config",
                 "batch_sampling": "$params.batch_sampling",
-                "degree": "$params.degree",
-                "fa_threshold": "$fa_threshold"]
+                "degree": "$params.degree_config",
+                "fa_threshold": "$params.fa_threshold",
+                "run_gesta": "$params.run_gesta",
+                "white_matter": "$params.white_matter_config"]
 
     engine = new groovy.text.SimpleTemplateEngine()
     template = engine.createTemplate(usage.text).make(bindings)
@@ -383,6 +385,9 @@ process GESTA {
         file(wm),
         file(peaks),
         file(fa) from files_for_gesta
+
+    when:
+    params.run_gesta
 
     output:
     // [sid, AC.trk, AF_L.trk, ...]
