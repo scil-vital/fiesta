@@ -408,7 +408,7 @@ process GESTA {
             scil_apply_transform_to_tractogram.py \${b} ${atlas_anat} \
             ${affine} mni_\${b} \
             --inverse --in_deformation ${inverse_warp} -f --keep_invalid
-
+            scil_remove_invalid_streamlines.py mni_\${b} mni_\${b} -f
             mv mni_\${b} mni/
         fi
     done
