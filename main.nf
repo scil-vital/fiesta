@@ -285,7 +285,7 @@ process CINTA {
     filter_streamline.py ${tractogram} ${atlas_directory} \
         ${model} ${atlas_anat} \
         ${thresholds} ${atlas_config} . \
-        --original_tractogram ${native_tractogram} --original_reference ${native_anat}  -d ${device} -b 500000 -f -vv
+        --original_tractogram ${native_tractogram} --original_reference ${native_anat} -d ${device} -b 500000 -f -vv
 
     mkdir tmp
     mv *trk tmp
