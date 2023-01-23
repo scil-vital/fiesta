@@ -170,7 +170,7 @@ process Check_Files_Compatibility {
 
     output:
     // [sid, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
-    set sid into sid_registration, sid_apply_registration
+    val sid into sid_registration, sid_apply_registration
 
     script:
     """
@@ -407,7 +407,7 @@ process GESTA {
             echo \${b}
             scil_apply_transform_to_tractogram.py \${b} ${atlas_anat} \
             ${affine} mni_\${b} \
-            --inverse --in_deformation ${inverse_warp} -f --keep_invalid
+            --inverse --in_deformation ${inverse_warp} --keep_invalid -f 
             scil_remove_invalid_streamlines.py mni_\${b} mni_\${b} -f
             mv mni_\${b} mni/
         fi
@@ -446,7 +446,8 @@ process GESTA {
 
     for f in *fodf_mask_20_220*.trk;
     do
-        scil_apply_transform_to_tractogram.py \$f ${native_anat} ${affine} to_concatenate_\$f --in_deformation ${warp} --reverse_operation -f -vv
+        scil_apply_transform_to_tractogram.py \$f ${native_anat} ${affine} to_concatenate_\$f --in_deformation ${warp} --reverse_operation --keep_invalid -f
+        scil_remove_invalid_streamlines.py to_concatenate_\$f to_concatenate_\$f -f
     done
 
     mkdir -p tmp 
