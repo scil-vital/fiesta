@@ -282,7 +282,7 @@ process CINTA {
 
     script:
     """
-    filter_streamline.py ${tractogram} ${atlas_directory} \
+    ae_bundle_streamlines.py ${tractogram} ${atlas_directory} \
         ${model} ${atlas_anat} \
         ${thresholds} ${atlas_config} . \
         --original_tractogram ${native_tractogram} --original_reference ${native_anat} -d ${device} -b 500000 -f -vv
@@ -416,13 +416,11 @@ process GESTA {
     antsApplyTransforms -d 3 -e 0 -i ${wm} -r ${atlas_anat} -o ${sid}_wm_mni.nii.gz -n NearestNeighbor -t ${warp} -t ${affine} -v 1
     antsApplyTransforms -d 3 -e 0 -i ${fa} -r ${atlas_anat} -o ${sid}_fa_mni.nii.gz -n Linear -t ${warp} -t ${affine} -v 1
     
-    generate_streamline.py \
-	--in_bundles_MNI mni/*.trk \
-	--in_bundles_native ${bundles} \
+    ae_generate_streamlines.py \
+	--in_bundles_common_space mni/*.trk \
 	--model ${model} \
-	--reference_MNI ${atlas_anat} \
+	--reference_common_space ${atlas_anat} \
 	--reference_native ${native_anat} \
-	--thresholds_file ${thresholds} \
 	--anatomy_file ${config} \
 	--output . \
 	--atlas_path ${atlas} \
@@ -432,8 +430,8 @@ process GESTA {
     --max_total_sampling ${max_total_sampling} \
     --ratio ${ratio_atlas_bundle} \
     -m $params.parzen_window_seeds \
-	--wm_parc_MNI ${sid}_wm_mni.nii.gz \
-    --fa_MNI ${sid}_fa_mni.nii.gz \
+	--wm_parc_common_space ${sid}_wm_mni.nii.gz \
+    --fa_common_space ${sid}_fa_mni.nii.gz \
 	--peaks ${peaks} \
 	--in_transfo ${affine} \
 	--in_deformation ${warp} \
