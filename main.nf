@@ -282,7 +282,7 @@ process CINTA {
 
     script:
     """
-    ae_bundle_streamlines.py ${tractogram} ${atlas_directory} \
+    ae_bundle_streamlines ${tractogram} ${atlas_directory} \
         ${model} ${atlas_anat} \
         ${thresholds} ${atlas_config} . \
         --original_tractogram ${native_tractogram} --original_reference ${native_anat} -d ${device} -b 500000 -f -vv
@@ -416,7 +416,7 @@ process GESTA {
     antsApplyTransforms -d 3 -e 0 -i ${wm} -r ${atlas_anat} -o ${sid}_wm_mni.nii.gz -n NearestNeighbor -t ${warp} -t ${affine} -v 1
     antsApplyTransforms -d 3 -e 0 -i ${fa} -r ${atlas_anat} -o ${sid}_fa_mni.nii.gz -n Linear -t ${warp} -t ${affine} -v 1
     
-    ae_generate_streamlines.py \
+    ae_generate_streamlines \
 	--in_bundles_common_space mni/*.trk \
 	--model ${model} \
 	--reference_common_space ${atlas_anat} \
