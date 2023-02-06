@@ -170,7 +170,7 @@ process Check_Files_Compatibility {
 
     output:
     // [sid, affine.mat, inverseWarp.nii.gz, atlas.nii.gz, t1.nii.gz]
-    set sid into sid_registration, sid_apply_registration
+    val sid into sid_registration, sid_apply_registration
 
     script:
     """
@@ -282,7 +282,7 @@ process CINTA {
 
     script:
     """
-    filter_streamline.py ${tractogram} ${atlas_directory} \
+    ae_bundle_streamlines ${tractogram} ${atlas_directory} \
         ${model} ${atlas_anat} \
         ${thresholds} ${atlas_config} . \
         --original_tractogram ${native_tractogram} --original_reference ${native_anat} -d ${device} -b 500000 -f -vv
@@ -407,7 +407,7 @@ process GESTA {
             echo \${b}
             scil_apply_transform_to_tractogram.py \${b} ${atlas_anat} \
             ${affine} mni_\${b} \
-            --inverse --in_deformation ${inverse_warp} -f --keep_invalid
+            --inverse --in_deformation ${inverse_warp} --keep_invalid -f 
             scil_remove_invalid_streamlines.py mni_\${b} mni_\${b} -f
             mv mni_\${b} mni/
         fi
@@ -416,13 +416,11 @@ process GESTA {
     antsApplyTransforms -d 3 -e 0 -i ${wm} -r ${atlas_anat} -o ${sid}_wm_mni.nii.gz -n NearestNeighbor -t ${warp} -t ${affine} -v 1
     antsApplyTransforms -d 3 -e 0 -i ${fa} -r ${atlas_anat} -o ${sid}_fa_mni.nii.gz -n Linear -t ${warp} -t ${affine} -v 1
     
-    generate_streamline.py \
-	--in_bundles_MNI mni/*.trk \
-	--in_bundles_native ${bundles} \
+    ae_generate_streamlines \
+	--in_bundles_common_space mni/*.trk \
 	--model ${model} \
-	--reference_MNI ${atlas_anat} \
+	--reference_common_space ${atlas_anat} \
 	--reference_native ${native_anat} \
-	--thresholds_file ${thresholds} \
 	--anatomy_file ${config} \
 	--output . \
 	--atlas_path ${atlas} \
@@ -432,8 +430,8 @@ process GESTA {
     --max_total_sampling ${max_total_sampling} \
     --ratio ${ratio_atlas_bundle} \
     -m $params.parzen_window_seeds \
-	--wm_parc_MNI ${sid}_wm_mni.nii.gz \
-    --fa_MNI ${sid}_fa_mni.nii.gz \
+	--wm_parc_common_space ${sid}_wm_mni.nii.gz \
+    --fa_common_space ${sid}_fa_mni.nii.gz \
 	--peaks ${peaks} \
 	--in_transfo ${affine} \
 	--in_deformation ${warp} \
@@ -448,7 +446,8 @@ process GESTA {
 
     for f in *fodf_mask_20_220*.trk;
     do
-        scil_apply_transform_to_tractogram.py \$f ${native_anat} ${affine} to_concatenate_\$f --in_deformation ${warp} --reverse_operation -f -vv
+        scil_apply_transform_to_tractogram.py \$f ${native_anat} ${affine} to_concatenate_\$f --in_deformation ${warp} --reverse_operation --keep_invalid -f
+        scil_remove_invalid_streamlines.py to_concatenate_\$f to_concatenate_\$f -f
     done
 
     mkdir -p tmp 
