@@ -3,9 +3,9 @@
 [![DOI tractolearn](https://zenodo.org/badge/DOI/10.5281/zenodo.7562790.svg)](https://doi.org/10.5281/zenodo.7562790)
 [![DOI RBX](https://zenodo.org/badge/DOI/10.5281/zenodo.7562635.svg)](https://doi.org/10.5281/zenodo.7562635)
 
-FIESTA Flow is a nextflow pipeline for white matter bundles recognition in tractography. 
+FIESTA Flow is a nextflow pipeline for white matter bundles recognition in tractography.
 
-To use this pipeline you must have access to 6 documents - namely: 
+To use this pipeline you must have access to 6 documents - namely:
 * best_model_contrastive_tractoinferno_hcp.pt
 * rbx_atlas_v10.json
 * mni_masked.nii.gz
