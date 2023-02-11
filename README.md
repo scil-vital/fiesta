@@ -43,9 +43,8 @@ section to know how to cite this work.
 
 ## Patent
 
-J. H. Legarreta, M. Descoteaux, and P.-M. Jodoin. “PROCESSING OF TRACTOGRAPHY
-RESULTS USING AN AUTOENCODER”. Filed 03 2021. Imeka Solutions Inc. United States
-Patent #17/337,413. Pending.
+Please refer to the `tractolearn` ["Patent"](https://github.com/scil-vital/tractolearn#patent)
+section to know about the patent related to this work.
 
 ## License
 
