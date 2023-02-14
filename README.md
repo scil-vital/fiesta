@@ -17,7 +17,7 @@ To use this pipeline you must have access to 6 documents - namely:
 * ratio.json
 * degree.json
 * white_matter_mask.json
-* docker image felixdumais1/fiesta:`<version>`
+* docker image felixdumais1/tractolearn-docker:`<version>`
 
 
 ## Requirements
@@ -30,7 +30,18 @@ To use this pipeline you must have access to 6 documents - namely:
 To launch the pipeline, replace `<version>` by the current fiesta version, and run:
 
 ```
-nextflow run main.nf --input inputs --model /path/to/best_model_contrastive_tractoinferno_hcp.pt --atlas_config /path/to/rbx_atlas_v10.json --atlas_anat /path/to/mni_masked.nii.gz --atlas_directory /path/to/data/atlas/pop_average --atlas_thresholds /path/to/thresholds_contrastive_tractoinferno_hcp.json --device cuda --number_rejection_sampling_config /path/to/number_rejection_sampling.json --max_total_sampling_config /path/to/max_total_sampling.json --batch_sampling 5000 --ratio_atlas_bundle_config /path/to/ratio.json --register_processes 24 --processes 24 --degree_config /path/to/degree.json --output_dir results --white_matter_config /path/to/white_matter_mask.json --fa_threshold 0.1 -resume -with-singularity felixdumais1/fiesta:<version>
+nextflow run main.nf --input inputs --model 
+/path/to/best_model_contrastive_tractoinferno_hcp.pt --atlas_config 
+/path/to/rbx_atlas_v10.json --atlas_anat /path/to/mni_masked.nii.gz 
+--atlas_directory /path/to/data/atlas/pop_average --atlas_thresholds 
+/path/to/thresholds_contrastive_tractoinferno_hcp.json --device cuda 
+--number_rejection_sampling_config /path/to/number_rejection_sampling.json 
+--max_total_sampling_config /path/to/max_total_sampling.json 
+--batch_sampling 5000 --ratio_atlas_bundle_config /path/to/ratio.json 
+--register_processes 24 --processes 24 --degree_config /path/to/degree.json 
+--output_dir results --white_matter_config /path/to/white_matter_mask.json 
+--fa_threshold 0.1 -resume -with-singularity 
+felixdumais1/tractolearn-docker:<version>
 ```
 
 ## USAGE
