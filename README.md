@@ -16,7 +16,7 @@ To use this pipeline you must have access to 6 documents - namely:
 * ratio.json
 * degree.json
 * white_matter_mask.json
-* docker image felixdumais1/fiesta:`<version>`
+* docker image felixdumais1/tractolearn-docker:`<version>`
 
 
 ## Requirements
@@ -49,6 +49,7 @@ nextflow run main.nf \
   --fa_threshold 0.1 \
   -resume \
   -with-singularity felixdumais1/fiesta:<version>
+
 ```
 
 ## USAGE

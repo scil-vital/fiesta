@@ -262,7 +262,7 @@ tractogram_registered
     .set{files_for_cinta}
 
 process CINTA {
-    // cache false
+    cache false
     memory '15 GB'
 
     input:
@@ -446,18 +446,27 @@ process GESTA {
 
     for f in *fodf_mask_20_220*.trk;
     do
-        scil_apply_transform_to_tractogram.py \$f ${native_anat} ${affine} to_concatenate_\$f --in_deformation ${warp} --reverse_operation --keep_invalid -f
-        scil_remove_invalid_streamlines.py to_concatenate_\$f to_concatenate_\$f -f
+        scil_count_streamlines.py \$f > count.json
+        count=\$(jq ".[].streamline_count" count.json)
+
+        if [[ \$count -gt 0 ]]; then
+            scil_apply_transform_to_tractogram.py \$f ${native_anat} ${affine} to_concatenate_\$f --in_deformation ${warp} --reverse_operation --keep_invalid -f
+            scil_remove_invalid_streamlines.py to_concatenate_\$f to_concatenate_\$f -f
+        fi
     done
 
-    mkdir -p tmp 
-    mv to_concatenate*fodf_mask_20_220*trk tmp
-    cat "${config}" | jq -r '. | keys[]' |
-    while IFS= read -r value; do
-        echo Concatenating tmp/*\${value}* | echo "Done"
-        scil_streamlines_math.py concatenate tmp/*\${value}* \${value}.trk -vv | echo "Done"
-        mv \${value}.trk ${sid}__\${value}_gesta.trk | echo "Done"
-    done
+    if find . -name "to_concatenate*fodf_mask_20_220*trk" | grep -q .; then
+        mkdir -p tmp
+        mv to_concatenate*fodf_mask_20_220*trk tmp
+        cat "${config}" | jq -r '. | keys[]' |
+        while IFS= read -r value; do
+            echo Concatenating tmp/*\${value}* | echo "Done"
+            scil_streamlines_math.py concatenate tmp/*\${value}* \${value}.trk -vv | echo "Done"
+            mv \${value}.trk ${sid}__\${value}_gesta.trk | echo "Done"
+        done
+    else
+        touch ${sid}__empty_gesta.trk
+    fi
 
     """
 }
@@ -474,19 +483,28 @@ process BINTA {
     set sid, file(bundles_finta), file(bundles_gesta), file(config) from bundles_for_binta
 
     output:
-    set sid, "${sid}__*binta.trk" into bundles_binta
+    set sid, "*binta*.trk" into bundles_binta
 
     script:
+    finta_bundle_list = bundles_finta.join(", ").replace(',', '')
     """
     cat ${config} | jq -r '. | keys[]' >keys.txt
 
-    while IFS= read -r value; do
-        count=`ls -1 *\${value}* 2>/dev/null | wc -l`
-        if [[ \$count != 0 ]]; then
-            echo Concatenating *\${value}*
-            scil_streamlines_math.py concatenate *\${value}* ${sid}__\${value}_binta.trk -vv --no_metadata --ignore_invalid &>warnings.txt
-        fi
-    done <keys.txt
+    if find . -name "*__empty_gesta.trk" | grep -q .; then
+        echo "No generated file"
+        for b in ${finta_bundle_list};
+        do
+            mv \${b} binta_\${b}
+        done
+    else
+        while IFS= read -r value; do
+            count=`ls -1 *\${value}* 2>/dev/null | wc -l`
+            if [[ \$count != 0 ]]; then
+                echo Concatenating *\${value}*
+                scil_streamlines_math.py concatenate *\${value}* ${sid}__\${value}_binta.trk -vv --no_metadata --ignore_invalid &>warnings.txt
+            fi
+        done <keys.txt
+    fi
     """
 }
 
@@ -499,31 +517,40 @@ process Clean_Bundles {
     set sid, file(bundles_binta), file(wm) from files_for_filtering
 
     output:
-    set sid, "${sid}__*binta_cleaned.trk" into bundles_binta_cleaned
-    file "eroded_${wm}"
+    set sid, "*binta_cleaned*.trk" into bundles_binta_cleaned
+    file "*eroded_${wm}"
 
     script:
     String bundles_list = bundles_binta.join(", ").replace(',', '')
     """
-    scil_image_math.py convert ${wm} ${wm} --data_type int16 -f
-    for bundle in ${bundles_list}; 
-    do
-        filename=\$(basename -- "\$bundle")
-        filename="\${filename%.*}"
+    if find . -name "*empty*.trk" | grep -q .; then
+        echo "No file"
+        for b in ${bundles_list};
+        do
+            mv \${b} binta_cleaned_\${b}
+        done
+        touch empty_eroded_${wm}
+    else
+        scil_image_math.py convert ${wm} ${wm} --data_type int16 -f
+        for bundle in ${bundles_list};
+        do
+            filename=\$(basename -- "\$bundle")
+            filename="\${filename%.*}"
 
-        scil_count_streamlines.py \${bundle} >streamline_count.json
-        streamline_count=\$(jq --arg keyvar "\${filename}" '.[\$keyvar].streamline_count' streamline_count.json)
+            scil_count_streamlines.py \${bundle} >streamline_count.json
+            streamline_count=\$(jq --arg keyvar "\${filename}" '.[\$keyvar].streamline_count' streamline_count.json)
 
-        if ((streamline_count>1)); then
-            echo \${streamline_count}
-            scil_remove_invalid_streamlines.py \${bundle} \${filename}_no_invalid.trk
-            scil_count_streamlines.py \${filename}_no_invalid.trk
+            if ((streamline_count>1)); then
+                echo \${streamline_count}
+                scil_remove_invalid_streamlines.py \${bundle} \${filename}_no_invalid.trk
+                scil_count_streamlines.py \${filename}_no_invalid.trk
 
-            scil_detect_streamlines_loops.py \${filename}_no_invalid.trk \${filename}_no_loops.trk -a 360 -f
-            scil_image_math.py erosion ${wm} 3 eroded_${wm} -f
-            scil_filter_tractogram.py \${filename}_no_loops.trk \${filename}_cleaned.trk --drawn_roi eroded_${wm} either_end exclude -f
-        fi
-    done
+                scil_detect_streamlines_loops.py \${filename}_no_invalid.trk \${filename}_no_loops.trk -a 360 -f
+                scil_image_math.py erosion ${wm} 3 eroded_${wm} -f
+                scil_filter_tractogram.py \${filename}_no_loops.trk \${filename}_cleaned.trk --drawn_roi eroded_${wm} either_end exclude -f
+            fi
+        done
+    fi
     """
 }
 
