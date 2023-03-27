@@ -191,7 +191,8 @@ sid_registration
 
 process Register_Anat {
     cpus params.register_processes
-    memory '24 GB'
+    memory '6 GB'
+
 
     input:
     set sid, file(reference), file(atlas_anat), val(registration_script) from reference_atlas_anat // [sid, t1.nii.gz, atlas.nii.gz]
