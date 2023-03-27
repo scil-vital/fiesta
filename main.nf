@@ -191,7 +191,7 @@ sid_registration
 
 process Register_Anat {
     cpus params.register_processes
-    memory '2 GB'
+    memory '6 GB'
 
     input:
     set sid, file(reference), file(atlas_anat), val(registration_script) from reference_atlas_anat // [sid, t1.nii.gz, atlas.nii.gz]
@@ -261,7 +261,7 @@ tractogram_registered
     .combine(device_for_cinta)
     .set{files_for_cinta}
 
-process CINTA {
+process FINTA_Multibundle {
     cache false
     memory '15 GB'
 
@@ -303,7 +303,7 @@ process CINTA {
 // [sid, AC_0.trk, AC_1.trk, ..., AF_L_0.trk, AF_L_1.trk, ..., config.json]
 bundles.combine(atlas_config_for_concatenation).set{file_for_concatenation}
 
-process Concatenating_CINTA {
+process Concatenating_FINTA_Multibundle {
     memory '2 GB'
 
     input:
@@ -364,7 +364,7 @@ bundle_for_gesta
     .join(fa)
     .set{files_for_gesta}
 
-process GESTA {
+process GESTA_Fast {
     memory '15 GB'
 
     input:
@@ -476,7 +476,7 @@ bundles_cinta
     .combine(atlas_config_for_finta_gesta).set{bundles_for_binta}
 
 
-process BINTA {
+process FIESTA {
     memory '5 GB'
 
     input:
@@ -510,7 +510,7 @@ process BINTA {
 
 bundles_binta.join(wm_for_filtering).set{ files_for_filtering }
 
-process Clean_Bundles {
+process FIESTA_Clean_Bundles {
     memory '5 GB'
 
     input:
@@ -557,7 +557,7 @@ process Clean_Bundles {
 // [sid, t1.nii.gz, AC.trk, AF_L.trk, ...]
 reference_for_display_cinta.join(bundles_concatenated).set{bundles_for_display_cinta}
 
-process Visualize_Bundles_CINTA {
+process Visualize_Bundles_FINTA_Multibundle {
     // errorStrategy 'ignore'
     //maxRetries 3
     //memory '20 GB'
@@ -579,7 +579,7 @@ process Visualize_Bundles_CINTA {
 
 reference_for_display_gesta.join(bundles_augmented).set{bundles_for_display_gesta}
 
-process Visualize_Bundles_GESTA {
+process Visualize_Bundles_GESTA_Fast {
     // errorStrategy 'ignore'
     //maxRetries 3
     //memory '20 GB'
@@ -601,7 +601,7 @@ process Visualize_Bundles_GESTA {
 
 reference_for_display_binta.join(bundles_binta_cleaned).set{bundles_for_display_binta}
 
-process Visualize_Bundles_BINTA {
+process Visualize_Bundles_FIESTA_Clean_Bundles {
     // errorStrategy 'ignore'
     //maxRetries 3
     //memory '20 GB'
