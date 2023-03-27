@@ -68,7 +68,7 @@ DESCRIPTION
     --run_gesta                             Run GESTA ($run_gesta).
 
     --registration_speed                    Registration speed 0 = antsRegistrationSyN.sh, 1 = antsRegsitrationSyNQuick.sh
-                                            Default: (1) -> Using: ($registration_speed)
+                                            Default: (0) -> Using: ($registration_speed)
 
     --register_processes                    Number of processes for registration task ($register_processes).
 
